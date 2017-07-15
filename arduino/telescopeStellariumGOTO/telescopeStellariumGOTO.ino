@@ -9,8 +9,16 @@ long h=0;
 long m=0;
 long s=0;
 long latitude=0;
+float latitudeDEC=0;
 long longitude=0;
-
+float longitudeDEC=0;
+//LST = 100.46 + 0.985647 * d + long + 15*UT
+float lst;
+float targetALT=0;
+float targetAZ=0;
+float currentALT=0;
+float currentAZ=0;
+float ut=0;
 
 void setup() {
   Serial.begin(9600);
@@ -81,10 +89,29 @@ void parseTargetDEC(String targetD){
   if(targetD[0] == '-'){
     targetDEC = targetDEC*-1L;
   }
-  
+}
+
+
+
+void calculateALT_AZ(){
+  //calculateLST();
+  float raDeg = targetRA;
+  float hourAngle = lst - raDeg;
+  if(hourAngle < 0){
+    hourAngle = hourAngle + 360.0F;
+  }
+  float sinAlt = sin(targetDEC)*sin(latitudeDEC)+cos(targetDEC)*cos(latitudeDEC)*cos(hourAngle);
+  targetALT = asin(sinAlt);
+  float cosA = (sin(targetDEC) - sin(targetALT)*sin(latitudeDEC))/(cos(targetALT)*cos(latitudeDEC));
+  if(sin(hourAngle) < 0){
+    targetAZ = acos(cosA);
+  }else{
+    targetAZ = 360.0F - acos(cosA);
+  }
 }
 
 void loop() {
+  calculateALT_AZ();
   if(Serial.available()>0){
     delay(60);
     while(Serial.available() > 0){
