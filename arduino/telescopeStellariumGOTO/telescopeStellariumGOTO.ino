@@ -3,6 +3,8 @@ char incomingChar;
 String readCmd;
 long currentRA=0;
 long currentDEC=0;
+long targetRA=0;
+long targetDEC=0;
 long h=0;
 long m=0;
 long s=0;
@@ -11,11 +13,12 @@ long s=0;
 void setup() {
   Serial.begin(9600);
   currentRA=23L*3600L+59L*60L+58L;
+  currentDEC=-23L*3600L+59L*60L;
 }
 void answerCurrentRA() {
   h = currentRA/3600L;
-  m = (currentRA - (h*3600))/60L;
-  s = currentRA - (h*3600) -(m*60);
+  m = (currentRA - (h*3600L))/60L;
+  s = currentRA - (h*3600L) -(m*60L);
   if(h <10){
     Serial.write('0');
   }
@@ -32,16 +35,55 @@ void answerCurrentRA() {
   }
   Serial.print(String(s,DEC));
   Serial.print('#');
-  //Serial.print("10:00:00#");
+}
+
+void answerCurrentDEC() {
+  h = currentDEC/3600L;
+  
+  m = (currentDEC - (h*3600L))/60L;
+  if(h < 0){
+    Serial.write('-');
+  }else{
+    Serial.write('+');
+  }
+  if(abs(h) <10){
+    Serial.write('0');
+  }
+  Serial.print(abs(h));
+  Serial.print((char) 223);
+  if(abs(m) <10){
+    Serial.print('0');
+  }
+  
+  Serial.print(String(abs(m),DEC));
+  Serial.print('#');
+}
+
+void parseTargetRA(String target){
+  long tH = target.toInt();
+  long tM = target.substring(3,5).toInt();
+  long tS = target.substring(6,8).toInt();
+  targetRA = tH*3600L + tM*60L + tS;
+}
+
+void parseTargetDEC(String targetD){
+  long tH = targetD.substring(1,3).toInt();
+  long tM = targetD.substring(4,6).toInt();
+  long tS = targetD.substring(7,9).toInt();
+  //Serial.print(String(tS,DEC));
+  targetDEC = tH*3600L + tM*60L + tS;
+  if(targetD[0] == '-'){
+    targetDEC = targetDEC*-1L;
+  }
+  
 }
 
 void loop() {
   if(Serial.available()>0){
-    delay(50);
+    delay(60);
     while(Serial.available() > 0){
       incomingChar = Serial.read();
       readCmd += incomingChar;
-      //Serial.print(incomingChar);
     }
     //Serial.println("/Read");
   }else{
@@ -50,23 +92,22 @@ void loop() {
         Serial.flush();
         readCmd="";
       }else if(readCmd.equals("#:GD#")){
-        Serial.write("+");
-        Serial.write("10");
-        Serial.write((char) 223);
-        Serial.write("00#");
+        answerCurrentDEC();
         Serial.flush();
         readCmd="";
-      } else if(readCmd.startsWith("#:Q#:Sr ")) {
+      } else if(readCmd.startsWith("#:Q#:Sr ") && readCmd.length() == 17) {
+        parseTargetRA(readCmd.substring(8));
         Serial.print("1#");
         Serial.flush();
         readCmd="";
-      }else if(readCmd.startsWith(":Sd ")) {
-        //Serial.print(readCmd);
+      }else if(readCmd.startsWith(":Sd ") && readCmd.length() == 14) {
+        parseTargetDEC(readCmd.substring(4));
         Serial.print("1#");
         Serial.flush();
         readCmd="";
       }else if(readCmd.startsWith(":MS#")) {
-        //Serial.print(readCmd);
+        currentRA = targetRA;
+        currentDEC= targetDEC;
         Serial.print("0#");
         Serial.flush();
         readCmd="";
