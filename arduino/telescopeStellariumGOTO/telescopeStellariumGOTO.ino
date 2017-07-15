@@ -1,3 +1,4 @@
+#include <math.h>
 
 char incomingChar;
 String readCmd;
@@ -94,7 +95,6 @@ void parseTargetDEC(String targetD){
 
 
 void calculateALT_AZ(){
-  //calculateLST();
   float raDeg = targetRA;
   float hourAngle = lst - raDeg;
   if(hourAngle < 0){
@@ -111,7 +111,11 @@ void calculateALT_AZ(){
 }
 
 void loop() {
+  //readRTC();
+  //calculateLST();
+  //readCurrentALT_AZ();
   calculateALT_AZ();
+  //
   if(Serial.available()>0){
     delay(60);
     while(Serial.available() > 0){
