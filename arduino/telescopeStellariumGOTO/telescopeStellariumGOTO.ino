@@ -8,12 +8,18 @@ long targetDEC=0;
 long h=0;
 long m=0;
 long s=0;
+long latitude=0;
+long longitude=0;
 
 
 void setup() {
   Serial.begin(9600);
   currentRA=23L*3600L+59L*60L+58L;
   currentDEC=-23L*3600L+59L*60L;
+  //-30.042140
+  latitude = -30L*3600L+02L*60L+31L;
+  //-51.210638
+  longitude = -51L*3600L+12L*60L+38L;
 }
 void answerCurrentRA() {
   h = currentRA/3600L;
