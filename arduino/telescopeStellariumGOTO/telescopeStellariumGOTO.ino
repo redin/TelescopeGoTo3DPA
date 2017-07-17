@@ -1,4 +1,9 @@
 #include <math.h>
+#include <DS1307.h>
+
+// Init the DS1307
+DS1307 rtc(A4, A5);
+
 
 char incomingChar;
 String readCmd;
@@ -20,9 +25,14 @@ float targetAZ=0;
 float currentALT=0;
 float currentAZ=0;
 float ut=0;
+unsigned long currentMilis=0;
+unsigned long previousMilis=0;
+Time time;
+
 
 void setup() {
   Serial.begin(9600);
+  
   currentRA=23L*3600L+59L*60L+58L;
   currentDEC=-23L*3600L+59L*60L;
   //-30.042140
@@ -92,8 +102,6 @@ void parseTargetDEC(String targetD){
   }
 }
 
-
-
 void calculateALT_AZ(){
   float raDeg = targetRA;
   float hourAngle = lst - raDeg;
@@ -111,18 +119,16 @@ void calculateALT_AZ(){
 }
 
 void loop() {
-  //readRTC();
+  time = rtc.getTime();
   //calculateLST();
   //readCurrentALT_AZ();
   calculateALT_AZ();
   //
   if(Serial.available()>0){
-    delay(60);
     while(Serial.available() > 0){
       incomingChar = Serial.read();
       readCmd += incomingChar;
     }
-    //Serial.println("/Read");
   }else{
       if(readCmd.equals("#:GR#")){
         answerCurrentRA();
@@ -132,7 +138,32 @@ void loop() {
         answerCurrentDEC();
         Serial.flush();
         readCmd="";
-      } else if(readCmd.startsWith("#:Q#:Sr ") && readCmd.length() == 17) {
+      }else if(readCmd.equals("#:GL#")){
+        if(time.hour < 10){
+          Serial.print("0");
+        }
+        Serial.print(time.hour);
+        Serial.print(":");
+        if(time.min < 10){
+          Serial.print("0");
+        }
+        Serial.print(time.min);
+        Serial.print(":");
+        if(time.sec < 10){
+          Serial.print("0");
+        }
+        Serial.print(time.sec);
+        Serial.print("#");
+        Serial.flush();
+        readCmd="";
+      }else if(readCmd.startsWith("#:SL ") && readCmd.length() == 14){
+        int ltH = readCmd.substring(5,7).toInt();
+        int ltM = readCmd.substring(8,10).toInt();
+        int ltS = readCmd.substring(11,13).toInt();
+        rtc.setTime(ltH,ltM,ltS);
+        Serial.flush();
+        readCmd="";
+      }else if(readCmd.startsWith("#:Q#:Sr ") && readCmd.length() == 17) {
         parseTargetRA(readCmd.substring(8));
         Serial.print("1#");
         Serial.flush();
