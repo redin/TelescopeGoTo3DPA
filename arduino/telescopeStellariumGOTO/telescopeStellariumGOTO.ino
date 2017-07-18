@@ -163,6 +163,13 @@ void loop() {
         rtc.setTime(ltH,ltM,ltS);
         Serial.flush();
         readCmd="";
+      }else if(readCmd.startsWith("#:SC ") && readCmd.length() == 14){
+        int month = readCmd.substring(5,7).toInt();
+        int day = readCmd.substring(8,10).toInt();
+        int yr = readCmd.substring(11,13).toInt();
+        rtc.setDate(day,month,yr);
+        Serial.flush();
+        readCmd="";
       }else if(readCmd.startsWith("#:Q#:Sr ") && readCmd.length() == 17) {
         parseTargetRA(readCmd.substring(8));
         Serial.print("1#");
