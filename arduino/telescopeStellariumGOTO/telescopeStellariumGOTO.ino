@@ -5,15 +5,20 @@
 #include <WiFiUdp.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 
-const char *ssid     = "net";
-const char *password = "passwd?";
+const char *ssid     = "network";
+const char *password = "password?";
+const int epoch2jd = 946684800;
 
 const int days2MonthN[]= {0,31,59,90,120,151,181,212,243,273,304,334};
 const int days2MonthL[]= {0,31,60,91,121,152,182,213,244,274,305,335};
 const double days2YearN[]={6208.5,6573.5,6938.5,7303.5,7669.5};
 
 WiFiUDP ntpUDP;
+int port = 10001;
+WiFiServer server(port);
 
 NTPClient timeClient(ntpUDP);
 int timeOffset = -10800;
@@ -56,6 +61,8 @@ unsigned long currentMilis=0;
 unsigned long previousMilis=0;
 double decimalTime;
 
+int count=0;
+
 void setup() {
 
   Serial.begin (115200);
@@ -78,6 +85,15 @@ void setup() {
   longitude = -51L*3600L+(-12L*60L)+(-38L);
 
   decimalTime =(double)timeClient.getHours()+((double)timeClient.getMinutes()/60.0000)+((double)timeClient.getSeconds()/3600.000000);
+  
+  if (MDNS.begin("esp8266")) {
+    Serial.println("MDNS responder started");
+  }
+
+  server.begin();
+  Serial.println("TCP server started");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());  
 }
 
 int toSteps(double value, boolean alt){
@@ -151,13 +167,10 @@ void parseTargetDEC(String targetD){
   }
 }
 
-double calcDaysSinceJ2000(int y, int m, int d, int hours, int minutes, int seconds){
-  // lets use https://api.usno.navy.mil/jdconverter?date=today&time=now
-  double decFractionOfDay = decimalTime/24.000000;
-  //TODO: take into account leap years
-  int days2Month = days2MonthN[m-1];
-  double days2Year = days2YearN[y-2017];
-  return decFractionOfDay + days2Month + d + days2Year;
+double calcDaysSinceJ2000(){
+  double epoch =  timeClient.getEpochTime();
+  double seconds = (epoch - epoch2jd);
+  return seconds / 86400;
 }
 
 void calculateALT_AZ(){
@@ -205,23 +218,78 @@ void moveMount(){
 }
 
 void calculateLST(){
-  //lets use https://api.usno.navy.mil/sidtime?date=today&coords=30.042140S,51.210638W&reps=1&intv_mag=1&intv_unit=seconds&time=now
  
   double lh = longitude/3600.0000;
   double lm = (longitude - (lh*3600.0000))/60.0000;
   double ls = longitude - (lh*3600.0000) -(lm*60.0000);
   double longDEC = lh + (lm/60.0000);
 //LST = 100.46 + 0.985647 * d + long + 15*UT
-  double daysJ2000 = calcDaysSinceJ2000(2019,9,timeClient.getDay(),timeClient.getHours(),timeClient.getMinutes(),timeClient.getSeconds()); 
+  double daysJ2000 = calcDaysSinceJ2000(); 
   lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longDEC + 100.460000;
   while(lst >360.0000){
     lst-= 360.00000;
   }
 }
 
-void loop() {
+WiFiClient cl;
 
+void loop() {
+  MDNS.update();
   
+  if(cl == NULL){
+    cl = server.available();
+  }else{
+    if(cl.connected()){
+      while(cl.available()>0){
+        short s = 0;
+        short tp = 0;
+        long tm = 0;
+        unsigned int ra = 0;
+        int dec = 0;
+        byte l = cl.read();
+        byte h =  cl.read();
+        s = (h<<8)+l;
+        l = cl.read();
+        h =  cl.read();
+        tp = (h<<8)+l;
+        byte l0 = cl.read();
+        byte l1 =  cl.read();
+        byte l2 = cl.read();
+        byte l3 =  cl.read();
+        byte h0 = cl.read();
+        byte h1 =  cl.read();
+        byte h2 = cl.read();
+        byte h3 =  cl.read();
+        tm = (h3<<56)+(h2<<48)+(h1<<40)+(h0<<32)+(l3<<24)+(l2<<16)+(l1<<8)+l0;
+        l0 = cl.read();
+        l1 =  cl.read();
+        l2 = cl.read();
+        l3 =  cl.read();
+        ra = (l3<<24)+(l2<<16)+(l1<<8)+l0;
+        l0 = cl.read();
+        l1 =  cl.read();
+        l2 = cl.read();
+        l3 =  cl.read();
+        dec = (l3<<24)+(l2<<16)+(l1<<8)+l0;
+        Serial.print("Size = ");
+        Serial.println(s);
+        Serial.print("Type = ");
+        Serial.println(tp);
+        Serial.print("Time = ");
+        Serial.println(tm);
+        Serial.print("RA = ");
+        Serial.println(ra, BIN); 
+        Serial.println(ra, DEC);
+        double t0 = (double)ra;
+        double t1 = (double) 4294967296;
+        Serial.println((t0*24.00d/t1),10);
+        Serial.print("DEC = ");
+        Serial.println(dec,BIN); //1073741824
+        Serial.println(dec,DEC);
+        Serial.println(map(dec,-1073741824,1073741824,-90,90),10);
+      }
+    }          
+  }
   currentMilis=millis();
   if(currentMilis > (previousMilis + 1000)){
     previousMilis = currentMilis;
@@ -234,79 +302,4 @@ void loop() {
   //Serial.print("AZ=");Serial.print(currentAZ); Serial.print(" "); Serial.print(targetAZ);  Serial.print(" "); Serial.print(deltaAZsteps); Serial.println(" "); 
   calculateALT_AZ();
   moveMount();
-  if(Serial.available()>0){
-    while(Serial.available() > 0){
-      incomingChar = Serial.read();
-      readCmd += incomingChar;
-    }
-  }else{
-      if(readCmd.equals("#:GR#")){
-        answerCurrentRA();
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.equals("#:GD#")){
-        answerCurrentDEC();
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.equals("#:GL#")){
-        if(timeClient.getHours() < 10){
-          Serial.print("0");
-        }
-        Serial.print(timeClient.getHours(),DEC);
-        Serial.print(":");
-        if(timeClient.getMinutes() < 10){
-          Serial.print("0");
-        }
-        Serial.print(timeClient.getMinutes(),DEC);
-        Serial.print(":");
-        if(timeClient.getSeconds() < 10){
-          Serial.print("0");
-        }
-        Serial.print(timeClient.getSeconds(),DEC);
-        Serial.print("#");
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.equals("#:GS#")){
-        Serial.print(lst);
-        Serial.print("#");
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.startsWith("#:SL ") && readCmd.length() == 14){
-        //Set the local Time
-        int ltH = readCmd.substring(5,7).toInt();
-        int ltM = readCmd.substring(8,10).toInt();
-        int ltS = readCmd.substring(11,13).toInt();
-        //rtc.adjust(DateTime(time.year(), time.month(), time.day(), ltH, ltM, ltS));
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.startsWith("#:SC ") && readCmd.length() == 14){
-        //Change Handbox Date to MM/DD/YY
-        int month = readCmd.substring(5,7).toInt();
-        int day = readCmd.substring(8,10).toInt();
-        int yr = readCmd.substring(11,13).toInt();
-        //rtc.adjust(DateTime(yr, month, day, rtime.Hour(), rtime.Minute(), rtime.Second()));
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.startsWith("#:Q#:Sr ") && readCmd.length() == 17) {
-        parseTargetRA(readCmd.substring(8));
-        Serial.print("1#");
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.startsWith(":Sd ") && readCmd.length() == 14) {
-        parseTargetDEC(readCmd.substring(4));
-        Serial.print("1#");
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.startsWith(":MS#")) {
-        currentRA = targetRA;
-        currentDEC= targetDEC;
-        Serial.print("0#");
-        Serial.flush();
-        readCmd="";
-      }else if(readCmd.length() > 20){
-        //Serial.println(readCmd);
-        readCmd="";
-      }
-  }
-    
 }
