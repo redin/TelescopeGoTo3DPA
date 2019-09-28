@@ -12,9 +12,9 @@ const char *ssid     = "network";
 const char *password = "password?";
 const int epoch2jd = 946684800;
 
-const int days2MonthN[]= {0,31,59,90,120,151,181,212,243,273,304,334};
-const int days2MonthL[]= {0,31,60,91,121,152,182,213,244,274,305,335};
-const double days2YearN[]={6208.5,6573.5,6938.5,7303.5,7669.5};
+//const int days2MonthN[]= {0,31,59,90,120,151,181,212,243,273,304,334};
+//const int days2MonthL[]= {0,31,60,91,121,152,182,213,244,274,305,335};
+//const double days2YearN[]={6208.5,6573.5,6938.5,7303.5,7669.5};
 
 WiFiUDP ntpUDP;
 int port = 10001;
@@ -39,6 +39,8 @@ boolean parked = false;
 
 char incomingChar;
 String readCmd;
+unsigned int ra = 0;
+int dec = 0;
 long currentRA=0;
 long currentDEC=0;
 long targetRA=0;
@@ -233,6 +235,54 @@ void calculateLST(){
 
 WiFiClient cl;
 
+void reportCurremtRADEC(){
+  if(cl.connected()){
+    byte zero = 0x0;
+    byte s = 0x18;
+    short tp = 0;
+    int st = 0;
+    //Size
+    cl.write(s);
+    cl.write(zero);
+    //Type
+    cl.write(zero);
+    cl.write(zero);
+    //Time
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    //RA
+    byte l0 = ra;
+    byte l1 = (ra>>8);
+    byte h0 = (ra>>16);
+    byte h1 = (ra>>24);
+    cl.write(l0);
+    cl.write(l1);
+    cl.write(h0);
+    cl.write(h1);
+    //DEC
+    l0 = dec;
+    l1 = (dec>>8);
+    h0 = (dec>>16);
+    h1 = (dec>>24);
+    cl.write(l0);
+    cl.write(l1);
+    cl.write(h0);
+    cl.write(h1);
+    //STATUS
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    cl.write(zero);
+    
+  }
+}
+
 void loop() {
   MDNS.update();
   
@@ -244,8 +294,6 @@ void loop() {
         short s = 0;
         short tp = 0;
         long tm = 0;
-        unsigned int ra = 0;
-        int dec = 0;
         byte l = cl.read();
         byte h =  cl.read();
         s = (h<<8)+l;
@@ -277,14 +325,12 @@ void loop() {
         Serial.println(tp);
         Serial.print("Time = ");
         Serial.println(tm);
-        Serial.print("RA = ");
-        Serial.println(ra, BIN); 
+        Serial.print("RA = "); 
         Serial.println(ra, DEC);
         double t0 = (double)ra;
         double t1 = (double) 4294967296;
         Serial.println((t0*24.00d/t1),10);
         Serial.print("DEC = ");
-        Serial.println(dec,BIN); //1073741824
         Serial.println(dec,DEC);
         Serial.println(map(dec,-1073741824,1073741824,-90,90),10);
       }
@@ -297,6 +343,7 @@ void loop() {
     timeClient.update();
     calculateLST();
     Serial.println(timeClient.getFormattedTime());
+    reportCurremtRADEC();
   }
   //Serial.print("ALT=");Serial.print(currentALT); Serial.print(" "); Serial.print(targetALT);  Serial.print(" "); Serial.print(deltaALTsteps); Serial.println(" "); 
   //Serial.print("AZ=");Serial.print(currentAZ); Serial.print(" "); Serial.print(targetAZ);  Serial.print(" "); Serial.print(deltaAZsteps); Serial.println(" "); 
