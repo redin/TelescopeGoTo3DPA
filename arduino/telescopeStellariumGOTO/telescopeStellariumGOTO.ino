@@ -12,16 +12,12 @@ const char *ssid     = "network";
 const char *password = "password?";
 const int epoch2jd = 946684800;
 
-//const int days2MonthN[]= {0,31,59,90,120,151,181,212,243,273,304,334};
-//const int days2MonthL[]= {0,31,60,91,121,152,182,213,244,274,305,335};
-//const double days2YearN[]={6208.5,6573.5,6938.5,7303.5,7669.5};
-
 WiFiUDP ntpUDP;
 int port = 10001;
 WiFiServer server(port);
 
 NTPClient timeClient(ntpUDP);
-int timeOffset = -10800;
+int timeOffset = 0;
 
 const int stepsPerRevolution = 32;
 const int stepsOne = 2048;
@@ -32,13 +28,11 @@ const double degreesPerStepALT = 90.0/stepsOne;
 int deltaAZsteps = 0;
 int deltaALTsteps = 0;
 int maxSpeed = 400;
-boolean parked = false;
+boolean parked = true;
 
 //Stepper stepperAZ(stepsPerRevolution, 8,10,9,11);            
 //Stepper stepperALT(stepsPerRevolution, 4,6,5,7);
 
-char incomingChar;
-String readCmd;
 unsigned int ra = 0;
 int dec = 0;
 long currentRA=0;
@@ -49,7 +43,7 @@ long h=0;
 long m=0;
 long s=0;
 long latitude=0;
-float latitudeDEC=0;
+float latitudeDEC=-30.042140;
 long longitude=0;
 float longitudeDEC=0;
 //LST = 100.46 + 0.985647 * d + long + 15*UT
@@ -63,7 +57,9 @@ unsigned long currentMilis=0;
 unsigned long previousMilis=0;
 double decimalTime;
 
-int count=0;
+double mapDouble(double x, double in_min, double in_max, double out_min, double out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 void setup() {
 
@@ -77,10 +73,6 @@ void setup() {
 
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
-  currentRA=23L*3600L+59L*60L+58L;
-  currentDEC=-23L*3600L+59L*60L;
-  targetRA=23L*3600L+59L*60L+58L;
-  targetDEC=-23L*3600L+59L*60L;
   //-30.042140
   latitude = -30L*3600L+02L*60L+31L;
   //-51.210638
@@ -103,69 +95,6 @@ int toSteps(double value, boolean alt){
     return value * stepsPerDegreeALT;
   }else{
     return value * stepsPerDegreeAZ;
-  }
-    
-}
-
-void answerCurrentRA() {
-  h = currentRA/3600L;
-  m = (currentRA - (h*3600L))/60L;
-  s = currentRA - (h*3600L) -(m*60L);
-  if(h <10){
-    Serial.write('0');
-  }
-  Serial.print(h);
-  Serial.print(':');
-  if(m <10){
-    Serial.print('0');
-  }
-  Serial.print(String(m,DEC));
-  Serial.print(':');
- 
-  if(s <10){
-    Serial.print('0');
-  }
-  Serial.print(String(s,DEC));
-  Serial.print('#');
-}
-
-void answerCurrentDEC() {
-  h = currentDEC/3600L;
-  
-  m = (currentDEC - (h*3600L))/60L;
-  if(h < 0){
-    Serial.write('-');
-  }else{
-    Serial.write('+');
-  }
-  if(abs(h) <10){
-    Serial.write('0');
-  }
-  Serial.print(abs(h));
-  Serial.print((char) 223);
-  if(abs(m) <10){
-    Serial.print('0');
-  }
-  
-  Serial.print(String(abs(m),DEC));
-  Serial.print('#');
-}
-
-void parseTargetRA(String target){
-  long tH = target.toInt();
-  long tM = target.substring(3,5).toInt();
-  long tS = target.substring(6,8).toInt();
-  targetRA = tH*3600L + tM*60L + tS;
-}
-
-void parseTargetDEC(String targetD){
-  long tH = targetD.substring(1,3).toInt();
-  long tM = targetD.substring(4,6).toInt();
-  long tS = targetD.substring(7,9).toInt();
-  //Serial.print(String(tS,DEC));
-  targetDEC = tH*3600L + tM*60L + tS;
-  if(targetD[0] == '-'){
-    targetDEC = targetDEC*-1L;
   }
 }
 
@@ -219,8 +148,42 @@ void moveMount(){
   }
 }
 
+void currentALTAZ2RADEC(){
+  //Practical Astronomy with your Calculator or Spreadsheet
+  double radLat = radians(latitudeDEC);
+  double sinCurDec = sin(currentALT)*sin(radLat)+cos(currentALT)*cos(radLat)*cos(currentAZ);
+  double radcurDec = asin(sinCurDec);
+  double curDec = degrees(radcurDec);
+  double cosHA = (sin(currentALT) - sin(radLat)* sin(sinCurDec))/ (cos(radLat)* cos(radcurDec));
+  double curHA1 = acos(cosHA);
+  double sinAZ = sin(currentAZ);
+  double curHA = 0;
+  if(sinAZ < 0){
+    curHA = curHA1;
+  }else{
+    curHA = 360 - curHA1;
+  }
+  double curRA1 = lst - curHA;
+  double curRA = 0;
+  if(curRA1 < 0){
+    curRA = curRA1 + 24;
+  }else{
+    curRA = curRA1;
+  }
+  Serial.print("currentALT = ");
+  Serial.println(currentALT,10);
+  Serial.print("currentAZ = ");
+  Serial.println(currentAZ,10);
+  Serial.print("radLat = ");
+  Serial.println(radLat,10);
+  Serial.print("DEC = ");
+  Serial.println(curDec,10);
+  Serial.print("RA = ");
+  Serial.println(curRA,10);
+}
+
 void calculateLST(){
- 
+  currentALTAZ2RADEC();
   double lh = longitude/3600.0000;
   double lm = (longitude - (lh*3600.0000))/60.0000;
   double ls = longitude - (lh*3600.0000) -(lm*60.0000);
@@ -231,11 +194,14 @@ void calculateLST(){
   while(lst >360.0000){
     lst-= 360.00000;
   }
+  Serial.print("LST = ");
+  Serial.println(lst,10);
 }
 
 WiFiClient cl;
 
 void reportCurremtRADEC(){
+  
   if(cl.connected()){
     byte zero = 0x0;
     byte s = 0x18;
@@ -283,70 +249,72 @@ void reportCurremtRADEC(){
   }
 }
 
+void readTargetRADEC(){
+  if(cl.connected()){
+    while(cl.available()>0){
+      short s = 0;
+      short tp = 0;
+      long tm = 0;
+      byte l = cl.read();
+      byte h =  cl.read();
+      s = (h<<8)+l;
+      l = cl.read();
+      h =  cl.read();
+      tp = (h<<8)+l;
+      byte l0 = cl.read();
+      byte l1 =  cl.read();
+      byte l2 = cl.read();
+      byte l3 =  cl.read();
+      byte h0 = cl.read();
+      byte h1 =  cl.read();
+      byte h2 = cl.read();
+      byte h3 =  cl.read();
+      tm = (h3<<56)+(h2<<48)+(h1<<40)+(h0<<32)+(l3<<24)+(l2<<16)+(l1<<8)+l0;
+      l0 = cl.read();
+      l1 =  cl.read();
+      l2 = cl.read();
+      l3 =  cl.read();
+      ra = (l3<<24)+(l2<<16)+(l1<<8)+l0;
+      l0 = cl.read();
+      l1 =  cl.read();
+      l2 = cl.read();
+      l3 =  cl.read();
+      dec = (l3<<24)+(l2<<16)+(l1<<8)+l0;
+      Serial.print("Size = ");
+      Serial.println(s);
+      Serial.print("Type = ");
+      Serial.println(tp);
+      Serial.print("Time = ");
+      Serial.println(tm);
+      Serial.print("RA = "); 
+      Serial.println(ra, DEC);
+      double t0 = (double)ra;
+      double t1 = (double) 4294967296;
+      Serial.println((t0*24.00d/t1),10);
+      Serial.print("DEC = ");
+      Serial.println(dec,DEC);
+      Serial.println(mapDouble(dec,-1073741824,1073741824,-90,90),10);
+    }
+  }
+}
+
 void loop() {
   MDNS.update();
   
   if(cl == NULL){
     cl = server.available();
   }else{
-    if(cl.connected()){
-      while(cl.available()>0){
-        short s = 0;
-        short tp = 0;
-        long tm = 0;
-        byte l = cl.read();
-        byte h =  cl.read();
-        s = (h<<8)+l;
-        l = cl.read();
-        h =  cl.read();
-        tp = (h<<8)+l;
-        byte l0 = cl.read();
-        byte l1 =  cl.read();
-        byte l2 = cl.read();
-        byte l3 =  cl.read();
-        byte h0 = cl.read();
-        byte h1 =  cl.read();
-        byte h2 = cl.read();
-        byte h3 =  cl.read();
-        tm = (h3<<56)+(h2<<48)+(h1<<40)+(h0<<32)+(l3<<24)+(l2<<16)+(l1<<8)+l0;
-        l0 = cl.read();
-        l1 =  cl.read();
-        l2 = cl.read();
-        l3 =  cl.read();
-        ra = (l3<<24)+(l2<<16)+(l1<<8)+l0;
-        l0 = cl.read();
-        l1 =  cl.read();
-        l2 = cl.read();
-        l3 =  cl.read();
-        dec = (l3<<24)+(l2<<16)+(l1<<8)+l0;
-        Serial.print("Size = ");
-        Serial.println(s);
-        Serial.print("Type = ");
-        Serial.println(tp);
-        Serial.print("Time = ");
-        Serial.println(tm);
-        Serial.print("RA = "); 
-        Serial.println(ra, DEC);
-        double t0 = (double)ra;
-        double t1 = (double) 4294967296;
-        Serial.println((t0*24.00d/t1),10);
-        Serial.print("DEC = ");
-        Serial.println(dec,DEC);
-        Serial.println(map(dec,-1073741824,1073741824,-90,90),10);
-      }
-    }          
+    readTargetRADEC();
   }
   currentMilis=millis();
   if(currentMilis > (previousMilis + 1000)){
     previousMilis = currentMilis;
-    decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
+    reportCurremtRADEC();
     timeClient.update();
+    decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
     calculateLST();
     Serial.println(timeClient.getFormattedTime());
-    reportCurremtRADEC();
   }
-  //Serial.print("ALT=");Serial.print(currentALT); Serial.print(" "); Serial.print(targetALT);  Serial.print(" "); Serial.print(deltaALTsteps); Serial.println(" "); 
-  //Serial.print("AZ=");Serial.print(currentAZ); Serial.print(" "); Serial.print(targetAZ);  Serial.print(" "); Serial.print(deltaAZsteps); Serial.println(" "); 
   calculateALT_AZ();
   moveMount();
 }
