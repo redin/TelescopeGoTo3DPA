@@ -7,6 +7,7 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
 
 const char *ssid     = "network";
 const char *password = "password?";
@@ -25,28 +26,21 @@ const double stepsPerDegreeAZ = stepsOne/360.0;
 const double stepsPerDegreeALT = stepsOne/90.0;
 const double degreesPerStepAZ = 360.0/stepsOne;
 const double degreesPerStepALT = 90.0/stepsOne;
-int deltaAZsteps = 0;
-int deltaALTsteps = 0;
+long deltaAZsteps = 0;
+long deltaALTsteps = 0;
 int maxSpeed = 400;
 boolean parked = true;
 
-//Stepper stepperAZ(stepsPerRevolution, 8,10,9,11);            
-//Stepper stepperALT(stepsPerRevolution, 4,6,5,7);
+Stepper stepperAZ(stepsPerRevolution, D1,D2,D3,D4);            
+Stepper stepperALT(stepsPerRevolution, D5,D6,D7,D8);
 
 unsigned int ra = 0;
 int dec = 0;
-long currentRA=0;
-long currentDEC=0;
-long targetRA=0;
-long targetDEC=0;
 long h=0;
 long m=0;
 long s=0;
-long latitude=0;
-float latitudeDEC=-30.042140;
-long longitude=0;
-float longitudeDEC=0;
-//LST = 100.46 + 0.985647 * d + long + 15*UT
+double latitudeDEC=-30.042140;
+double longitudeDEC=-51.210638;
 double lst;
 double targetALT=0;
 double targetAZ=0;
@@ -61,6 +55,14 @@ double mapDouble(double x, double in_min, double in_max, double out_min, double 
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+double stellariumRA2Double(unsigned int intRA){
+  return mapDouble(intRA, 0x80000000, 0x100000000, 12.0, 24.0);
+}
+
+double stellariumDEC2Double(int intDEC){
+  return mapDouble(intDEC, -0x40000000, 0x40000000, -90.0, 90.0);
+}
+
 void setup() {
 
   Serial.begin (115200);
@@ -71,12 +73,47 @@ void setup() {
     Serial.print ( "." );
   }
 
+  // Hostname defaults to esp8266-[ChipID]
+  // ArduinoOTA.setHostname("myesp8266");
+
+  // No authentication by default
+  // ArduinoOTA.setPassword("admin");
+
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else { // U_SPIFFS
+      type = "filesystem";
+    }
+
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
+  
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
-  //-30.042140
-  latitude = -30L*3600L+02L*60L+31L;
-  //-51.210638
-  longitude = -51L*3600L+(-12L*60L)+(-38L);
 
   decimalTime =(double)timeClient.getHours()+((double)timeClient.getMinutes()/60.0000)+((double)timeClient.getSeconds()/3600.000000);
   
@@ -102,25 +139,6 @@ double calcDaysSinceJ2000(){
   double epoch =  timeClient.getEpochTime();
   double seconds = (epoch - epoch2jd);
   return seconds / 86400;
-}
-
-void calculateALT_AZ(){
-  double lh = targetRA/3600.0000;
-  double lm = (targetRA - (lh*3600.0000))/60.0000;
-  double ls = targetRA - (lh*3600.0000) -(lm*60.0000);
-  double raDeg = (double)lh + ((double)lm/60.0000)+ ((double)ls/3600.0000);;
-  double hourAngle = lst - raDeg;
-  if(hourAngle < 0){
-    hourAngle = hourAngle + 360.0F;
-  }
-  double sinAlt = sin(targetDEC)*sin(latitudeDEC)+cos(targetDEC)*cos(latitudeDEC)*cos(hourAngle);
-  targetALT = asin(sinAlt);
-  double cosA = (sin(targetDEC) - sin(targetALT)*sin(latitudeDEC))/(cos(targetALT)*cos(latitudeDEC));
-  if(sin(hourAngle) < 0){
-    targetAZ = acos(cosA);
-  }else{
-    targetAZ = 360.0F - acos(cosA);
-  }
 }
 
 void moveMount(){
@@ -163,7 +181,7 @@ void currentALTAZ2RADEC(){
   }else{
     curHA = 360 - curHA1;
   }
-  double curRA1 = lst - curHA;
+  double curRA1 = mapDouble(lst, 0.0, 360.0, 0.0, 24.0) - curHA;
   double curRA = 0;
   if(curRA1 < 0){
     curRA = curRA1 + 24;
@@ -183,24 +201,20 @@ void currentALTAZ2RADEC(){
 }
 
 void calculateLST(){
-  currentALTAZ2RADEC();
-  double lh = longitude/3600.0000;
-  double lm = (longitude - (lh*3600.0000))/60.0000;
-  double ls = longitude - (lh*3600.0000) -(lm*60.0000);
-  double longDEC = lh + (lm/60.0000);
-//LST = 100.46 + 0.985647 * d + long + 15*UT
+  //LST = 100.46 + 0.985647 * d + long + 15*UT
   double daysJ2000 = calcDaysSinceJ2000(); 
-  lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longDEC + 100.460000;
+  lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longitudeDEC + 100.460000;
   while(lst >360.0000){
     lst-= 360.00000;
   }
+  currentALTAZ2RADEC();
   Serial.print("LST = ");
-  Serial.println(lst,10);
+  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
 }
 
 WiFiClient cl;
 
-void reportCurremtRADEC(){
+void reportcurrentRADEC(){
   
   if(cl.connected()){
     byte zero = 0x0;
@@ -288,19 +302,17 @@ void readTargetRADEC(){
       Serial.println(tm);
       Serial.print("RA = "); 
       Serial.println(ra, DEC);
-      double t0 = (double)ra;
-      double t1 = (double) 4294967296;
-      Serial.println((t0*24.00d/t1),10);
+      Serial.println(stellariumRA2Double(ra),10);
       Serial.print("DEC = ");
       Serial.println(dec,DEC);
-      Serial.println(mapDouble(dec,-1073741824,1073741824,-90,90),10);
+      Serial.println(stellariumDEC2Double(dec),10);
     }
   }
 }
 
 void loop() {
+  ArduinoOTA.handle();
   MDNS.update();
-  
   if(cl == NULL){
     cl = server.available();
   }else{
@@ -309,12 +321,11 @@ void loop() {
   currentMilis=millis();
   if(currentMilis > (previousMilis + 1000)){
     previousMilis = currentMilis;
-    reportCurremtRADEC();
+    reportcurrentRADEC();
     timeClient.update();
     decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
     calculateLST();
     Serial.println(timeClient.getFormattedTime());
   }
-  calculateALT_AZ();
   moveMount();
 }
