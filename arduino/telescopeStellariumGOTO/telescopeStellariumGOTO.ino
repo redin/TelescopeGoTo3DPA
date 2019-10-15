@@ -60,12 +60,24 @@ double mapDouble(double x, double in_min, double in_max, double out_min, double 
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+unsigned int mapUint(double x, double in_min, double in_max, unsigned int out_min, unsigned int out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 double stellariumRA2Double(unsigned int intRA){
   return mapDouble(intRA, 0x80000000, 0x100000000, 12.0, 24.0);
 }
 
 double stellariumDEC2Double(int intDEC){
   return mapDouble(intDEC, -0x40000000, 0x40000000, -90.0, 90.0);
+}
+
+unsigned int RADouble2stellarium(double raDouble){
+  return mapUint(raDouble, 12.0, 24.0, 0x80000000, 0x100000000);
+}
+
+int DECDouble2stellarium(double DECDouble){
+  return map(DECDouble, -90.0, 90.0, -0x40000000, 0x40000000);
 }
 
 void setup() {
