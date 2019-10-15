@@ -14,11 +14,11 @@ const char *password = "password?";
 const int epoch2jd = 946684800;
 
 WiFiUDP ntpUDP;
-int port = 10001;
+const int port = 10001;
 WiFiServer server(port);
 
 NTPClient timeClient(ntpUDP);
-int timeOffset = 0;
+const int timeOffset = 0;
 
 const int stepsPerRevolution = 32;
 const int stepsOne = 2048;
@@ -26,27 +26,32 @@ const double stepsPerDegreeAZ = stepsOne/360.0;
 const double stepsPerDegreeALT = stepsOne/90.0;
 const double degreesPerStepAZ = 360.0/stepsOne;
 const double degreesPerStepALT = 90.0/stepsOne;
-long deltaAZsteps = 0;
-long deltaALTsteps = 0;
-int maxSpeed = 400;
-boolean parked = true;
+const int maxSpeed = 400;
 
 Stepper stepperAZ(stepsPerRevolution, D1,D2,D3,D4);            
 Stepper stepperALT(stepsPerRevolution, D5,D6,D7,D8);
+WiFiClient cl;
 
+double latitudeDEC=-30.042140;
+double longitudeDEC=-51.210638;
+boolean parked = true;
+long deltaAZsteps = 0;
+long deltaALTsteps = 0;
 unsigned int ra = 0;
 int dec = 0;
 long h=0;
 long m=0;
 long s=0;
-double latitudeDEC=-30.042140;
-double longitudeDEC=-51.210638;
 double lst;
+double targetRA=0;
+double targetDEC=0;
+double currentRA=0;
+double currentDEC=0;
 double targetALT=0;
 double targetAZ=0;
 double currentALT=0;
 double currentAZ=0;
-double ut=0;
+
 unsigned long currentMilis=0;
 unsigned long previousMilis=0;
 double decimalTime;
@@ -114,8 +119,6 @@ void setup() {
   
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
-
-  decimalTime =(double)timeClient.getHours()+((double)timeClient.getMinutes()/60.0000)+((double)timeClient.getSeconds()/3600.000000);
   
   if (MDNS.begin("esp8266")) {
     Serial.println("MDNS responder started");
@@ -141,6 +144,17 @@ double calcDaysSinceJ2000(){
   return seconds / 86400;
 }
 
+void calculateLST(){
+  //LST = 100.46 + 0.985647 * d + long + 15*UT
+  double daysJ2000 = calcDaysSinceJ2000(); 
+  lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longitudeDEC + 100.460000;
+  while(lst >360.0000){
+    lst-= 360.00000;
+  }
+  Serial.print("LST = ");
+  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
+}
+
 void moveMount(){
   if(!parked){
     deltaAZsteps = toSteps(targetAZ - currentAZ, false);
@@ -148,24 +162,25 @@ void moveMount(){
     if(deltaAZsteps > 0){
       //stepperAZ.setSpeed(min(deltaAZsteps, maxSpeed));
       //stepperAZ.step(1);
-      currentAZ+= degreesPerStepAZ;
+      //currentAZ+= degreesPerStepAZ;
     }else if(deltaAZsteps < 0){
       //stepperAZ.setSpeed(min(abs(deltaAZsteps), maxSpeed));
       //stepperAZ.step(-1);
-      currentAZ-= degreesPerStepAZ;
+      //currentAZ-= degreesPerStepAZ;
     }
     if(deltaALTsteps > 0){
       //stepperALT.setSpeed(min(deltaALTsteps, maxSpeed));
       //stepperALT.step(1);
-      currentALT+= degreesPerStepALT;
+      //currentALT+= degreesPerStepALT;
     }else if(deltaALTsteps < 0){
       //stepperALT.setSpeed(min(abs(deltaALTsteps), maxSpeed));
       //stepperALT.step(-1);
-      currentALT-= degreesPerStepALT;
+      //currentALT-= degreesPerStepALT;
     }  
   }
 }
 
+//to convert the current telescope position to RADEC to pass to stellarium
 void currentALTAZ2RADEC(){
   //Practical Astronomy with your Calculator or Spreadsheet
   double radLat = radians(latitudeDEC);
@@ -200,22 +215,11 @@ void currentALTAZ2RADEC(){
   Serial.println(curRA,10);
 }
 
-void calculateLST(){
-  //LST = 100.46 + 0.985647 * d + long + 15*UT
-  double daysJ2000 = calcDaysSinceJ2000(); 
-  lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longitudeDEC + 100.460000;
-  while(lst >360.0000){
-    lst-= 360.00000;
-  }
-  currentALTAZ2RADEC();
-  Serial.print("LST = ");
-  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
-}
+//to convert target position sent by stellarium to a telescope position
+void targetRADEC2ALTAZ(){}
 
-WiFiClient cl;
 
 void reportcurrentRADEC(){
-  
   if(cl.connected()){
     byte zero = 0x0;
     byte s = 0x18;
@@ -259,7 +263,6 @@ void reportcurrentRADEC(){
     cl.write(zero);
     cl.write(zero);
     cl.write(zero);
-    
   }
 }
 
@@ -294,23 +297,14 @@ void readTargetRADEC(){
       l2 = cl.read();
       l3 =  cl.read();
       dec = (l3<<24)+(l2<<16)+(l1<<8)+l0;
-      Serial.print("Size = ");
-      Serial.println(s);
-      Serial.print("Type = ");
-      Serial.println(tp);
-      Serial.print("Time = ");
-      Serial.println(tm);
-      Serial.print("RA = "); 
-      Serial.println(ra, DEC);
-      Serial.println(stellariumRA2Double(ra),10);
-      Serial.print("DEC = ");
-      Serial.println(dec,DEC);
-      Serial.println(stellariumDEC2Double(dec),10);
+      targetRA = stellariumRA2Double(ra);
+      targetDEC = stellariumDEC2Double(dec);
     }
   }
 }
 
 void loop() {
+  currentMilis=millis();
   ArduinoOTA.handle();
   MDNS.update();
   if(cl == NULL){
@@ -318,13 +312,14 @@ void loop() {
   }else{
     readTargetRADEC();
   }
-  currentMilis=millis();
   if(currentMilis > (previousMilis + 1000)){
     previousMilis = currentMilis;
-    reportcurrentRADEC();
     timeClient.update();
     decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
     calculateLST();
+    targetRADEC2ALTAZ();
+    currentALTAZ2RADEC();
+    reportcurrentRADEC();
     Serial.println(timeClient.getFormattedTime());
   }
   moveMount();
