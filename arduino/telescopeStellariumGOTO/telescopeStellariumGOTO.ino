@@ -269,6 +269,7 @@ void targetRADEC2ALTAZ(){
 
 void reportcurrentRADEC(){
   if(cl.connected()){
+    double epoch =  timeClient.getEpochTime();
     byte zero = 0x0;
     byte s = 0x18;
     short tp = 0;
@@ -289,19 +290,21 @@ void reportcurrentRADEC(){
     cl.write(zero);
     cl.write(zero);
     //RA
-    byte l0 = ra;
-    byte l1 = (ra>>8);
-    byte h0 = (ra>>16);
-    byte h1 = (ra>>24);
+    unsigned int cra = RADouble2stellarium(currentRA);
+    byte l0 = cra;
+    byte l1 = (cra>>8);
+    byte h0 = (cra>>16);
+    byte h1 = (cra>>24);
     cl.write(l0);
     cl.write(l1);
     cl.write(h0);
     cl.write(h1);
     //DEC
-    l0 = dec;
-    l1 = (dec>>8);
-    h0 = (dec>>16);
-    h1 = (dec>>24);
+    int cdec = DECDouble2stellarium(currentDEC);
+    l0 = cdec;
+    l1 = (cdec>>8);
+    h0 = (cdec>>16);
+    h1 = (cdec>>24);
     cl.write(l0);
     cl.write(l1);
     cl.write(h0);
