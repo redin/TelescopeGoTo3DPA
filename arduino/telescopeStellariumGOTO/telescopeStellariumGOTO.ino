@@ -62,7 +62,7 @@ unsigned int mapUint(double x, double in_min, double in_max, unsigned int out_mi
 }
 
 double stellariumRA2Double(unsigned int intRA){
-  return mapDouble(intRA, 0x80000000, 0x100000000, 12.0, 24.0);
+  return mapDouble(intRA, 0x0, 0x100000000, 0.0, 24.0);
 }
 
 double stellariumDEC2Double(int intDEC){
@@ -70,7 +70,7 @@ double stellariumDEC2Double(int intDEC){
 }
 
 unsigned int RADouble2stellarium(double raDouble){
-  return mapUint(raDouble, 12.0, 24.0, 0x80000000, 0x100000000);
+  return mapUint(raDouble, 0.0, 24.0, 0x0, 0x100000000);
 }
 
 int DECDouble2stellarium(double DECDouble){
@@ -160,8 +160,11 @@ void calculateLST(){
   while(lst >360.0000){
     lst-= 360.00000;
   }
-  Serial.print("LST = ");
-  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
+  while(lst < 0.0000){
+    lst+= 360.00000;
+  }
+  //Serial.print("LST = ");
+  //Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
 }
 
 void moveMount(){
@@ -192,41 +195,77 @@ void moveMount(){
 //to convert the current telescope position to RADEC to pass to stellarium
 void currentALTAZ2RADEC(){
   //Practical Astronomy with your Calculator or Spreadsheet
+  double radALT = radians(currentALT);
+  double radAZ = radians(currentAZ);
   double radLat = radians(latitudeDEC);
-  double sinCurDec = sin(currentALT)*sin(radLat)+cos(currentALT)*cos(radLat)*cos(currentAZ);
+  double sinCurDec = sin(radALT)*sin(radLat)+cos(radALT)*cos(radLat)*cos(radAZ);
   double radcurDec = asin(sinCurDec);
   double curDec = degrees(radcurDec);
-  double cosHA = (sin(currentALT) - sin(radLat)* sin(sinCurDec))/ (cos(radLat)* cos(radcurDec));
-  double curHA1 = acos(cosHA);
-  double sinAZ = sin(currentAZ);
-  double curHA = 0;
-  if(sinAZ < 0){
-    curHA = curHA1;
-  }else{
-    curHA = 360 - curHA1;
+
+  double y = -cos(radALT)*cos(radLat)*sin(radAZ);
+  double x = sin(radALT)-sin(radLat)*sinCurDec;
+  double a = atan2(x,y);
+  double b = degrees(a);
+  double c = 0;
+  if(x < 0){
+    c = b + 180.0;
+  }else if(x > 0 & y < 0){
+    c = b + 360.0;
   }
-  double curRA1 = mapDouble(lst, 0.0, 360.0, 0.0, 24.0) - curHA;
+  
+  double curRA1 = lst - c;
   double curRA = 0;
   if(curRA1 < 0){
     curRA = curRA1 + 24;
   }else{
     curRA = curRA1;
   }
-  Serial.print("currentALT = ");
-  Serial.println(currentALT,10);
-  Serial.print("currentAZ = ");
-  Serial.println(currentAZ,10);
-  Serial.print("radLat = ");
-  Serial.println(radLat,10);
-  Serial.print("DEC = ");
-  Serial.println(curDec,10);
-  Serial.print("RA = ");
-  Serial.println(curRA,10);
+  //Serial.print("DEC = ");
+  //Serial.println(curDec,10);
+  currentDEC = curDec;
+  //Serial.print("RA = ");
+  //Serial.println(curRA,10);
+  currentRA = curRA;
 }
 
 //to convert target position sent by stellarium to a telescope position
-void targetRADEC2ALTAZ(){}
+void targetRADEC2ALTAZ(){
+  double h1 =  lst - targetRA;
+  double h = 0;
+  if(h1 < 0){
+    h = h1 + 24;
+  }else{
+    h = h1;
+  }
+  double radH = radians(h);
+  double radDEC = radians(targetDEC);
+  double radLat = radians(latitudeDEC);
+  double sinALT = sin(radDEC)*sin(radLat)+cos(radDEC)*cos(radLat)*cos(h);
+  double radALT = asin(sinALT);
+  double alt = degrees(radALT);
 
+  double y = -cos(radDEC)*cos(radLat)*sin(radH);
+  double x = sin(radDEC)-sin(radLat)*sinALT;
+  double a = atan2(x,y);
+  double b = degrees(a);
+  double c = 0;
+  if(x < 0){
+    c = b + 180.0;
+  }else if(x > 0 & y < 0){
+    c = b + 360.0;
+  }
+  
+  double az = c;
+
+  if(c < 0){
+    az = c + 360.0;
+  }else{
+    az = c;
+  }
+  targetALT = alt;
+  targetAZ = az;
+  
+}
 
 void reportcurrentRADEC(){
   if(cl.connected()){
@@ -330,6 +369,22 @@ void loop() {
     currentALTAZ2RADEC();
     reportcurrentRADEC();
     Serial.println(timeClient.getFormattedTime());
+    Serial.print("targetDEC = ");
+    Serial.println(targetDEC,10);
+    Serial.print("targetRA = ");
+    Serial.println(targetRA,10);
+    Serial.print("targetALT = ");
+    Serial.println(targetALT,10);
+    Serial.print("targetAZ = ");
+    Serial.println(targetAZ,10);
+    Serial.print("currentDEC = ");
+    Serial.println(currentDEC,10);
+    Serial.print("currentRA = ");
+    Serial.println(currentRA,10);
+    Serial.print("currentALT = ");
+    Serial.println(currentALT,10);
+    Serial.print("currentAZ = ");
+    Serial.println(currentAZ,10);
   }
   moveMount();
 }
