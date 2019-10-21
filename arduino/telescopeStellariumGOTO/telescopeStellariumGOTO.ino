@@ -6,7 +6,7 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
+//#include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 
 const char *ssid     = "network";
@@ -129,9 +129,9 @@ void setup() {
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
   
-  if (MDNS.begin("esp8266")) {
-    Serial.println("MDNS responder started");
-  }
+//  if (MDNS.begin("esp8266")) {
+//    Serial.println("MDNS responder started");
+//  }
 
   server.begin();
   Serial.println("TCP server started");
@@ -163,8 +163,8 @@ void calculateLST(){
   while(lst < 0.0000){
     lst+= 360.00000;
   }
-  //Serial.print("LST = ");
-  //Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
+  Serial.print("LST = ");
+  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
 }
 
 void moveMount(){
@@ -207,16 +207,16 @@ void currentALTAZ2RADEC(){
   double a = atan2(x,y);
   double b = degrees(a);
   double c = 0;
-  if(x < 0){
-    c = b + 180.0;
-  }else if(x > 0 & y < 0){
-    c = b + 360.0;
+  if(x < 0.0000){
+    c = b + 180.0000;
+  }else if(x > 0.0000 & y < 0.0000){
+    c = b + 360.0000;
   }
   
-  double curRA1 = lst - c;
+  double curRA1 = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - c;
   double curRA = 0;
-  if(curRA1 < 0){
-    curRA = curRA1 + 24;
+  if(curRA1 < 0.0000){
+    curRA = curRA1 + 24.0000;
   }else{
     curRA = curRA1;
   }
@@ -230,35 +230,35 @@ void currentALTAZ2RADEC(){
 
 //to convert target position sent by stellarium to a telescope position
 void targetRADEC2ALTAZ(){
-  double h1 =  lst - targetRA;
+  double h1 =  mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - targetRA;
   double h = 0;
-  if(h1 < 0){
-    h = h1 + 24;
+  if(h1 < 0.0000){
+    h = h1 + 24.0000;
   }else{
     h = h1;
   }
-  double radH = radians(h);
+  double degH = h*15.0000;
   double radDEC = radians(targetDEC);
   double radLat = radians(latitudeDEC);
-  double sinALT = sin(radDEC)*sin(radLat)+cos(radDEC)*cos(radLat)*cos(h);
+  double sinALT = sin(radDEC)*sin(radLat)+cos(radDEC)*cos(radLat)*cos(degH);
   double radALT = asin(sinALT);
   double alt = degrees(radALT);
 
-  double y = -cos(radDEC)*cos(radLat)*sin(radH);
+  double y = -cos(radDEC)*cos(radLat)*sin(degH);
   double x = sin(radDEC)-sin(radLat)*sinALT;
   double a = atan2(x,y);
   double b = degrees(a);
   double c = 0;
-  if(x < 0){
-    c = b + 180.0;
-  }else if(x > 0 & y < 0){
-    c = b + 360.0;
+  if(x < 0.0000){
+    c = b + 180.0000;
+  }else if(x > 0.0000 & y < 0.0000){
+    c = b + 360.0000;
   }
   
   double az = c;
 
-  if(c < 0){
-    az = c + 360.0;
+  if(c < 0.0000){
+    az = c + 360.0000;
   }else{
     az = c;
   }
@@ -357,7 +357,7 @@ void readTargetRADEC(){
 void loop() {
   currentMilis=millis();
   ArduinoOTA.handle();
-  MDNS.update();
+  //MDNS.update();
   if(cl == NULL){
     cl = server.available();
   }else{
