@@ -70,7 +70,7 @@ double stellariumDEC2Double(int intDEC){
 }
 
 unsigned int RADouble2stellarium(double raDouble){
-  return mapUint(raDouble, 0.0, 24.0, 0x0, 0x100000000);
+  return mapUint(raDouble, 0.0, 360.0, 0x80000000, 0x100000000);
 }
 
 int DECDouble2stellarium(double DECDouble){
@@ -202,24 +202,19 @@ void currentALTAZ2RADEC(){
   double radcurDec = asin(sinCurDec);
   double curDec = degrees(radcurDec);
 
-  double y = -cos(radALT)*cos(radLat)*sin(radAZ);
-  double x = sin(radALT)-sin(radLat)*sinCurDec;
-  double a = atan2(x,y);
-  double b = degrees(a);
-  double c = 0;
-  if(x < 0.0000){
-    c = b + 180.0000;
-  }else if(x > 0.0000 & y < 0.0000){
-    c = b + 360.0000;
+  double sinAlt = sin(radALT);
+  double sinLat = sin(radLat);
+  double cosH = (sinAlt - (sinLat*sinCurDec))/(cos(radLat)*cos(radcurDec));
+  double h = degrees(acos(cosH));
+  double sinA = sin(radAZ);
+  if(sinA > 0.0){
+    h = 360.0 - h;
+  }
+  double curRA = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - (h/15.0);
+  if(curRA < 0.0){
+    curRA = curRA + 24.0;
   }
   
-  double curRA1 = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - c;
-  double curRA = 0;
-  if(curRA1 < 0.0000){
-    curRA = curRA1 + 24.0000;
-  }else{
-    curRA = curRA1;
-  }
   //Serial.print("DEC = ");
   //Serial.println(curDec,10);
   currentDEC = curDec;
@@ -230,38 +225,22 @@ void currentALTAZ2RADEC(){
 
 //to convert target position sent by stellarium to a telescope position
 void targetRADEC2ALTAZ(){
-  double h1 =  mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - targetRA;
-  double h = 0;
-  if(h1 < 0.0000){
-    h = h1 + 24.0000;
-  }else{
-    h = h1;
-  }
+  double h =  mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - targetRA;
   double degH = h*15.0000;
+  double radH = radians(degH);
   double radDEC = radians(targetDEC);
   double radLat = radians(latitudeDEC);
-  double sinALT = sin(radDEC)*sin(radLat)+cos(radDEC)*cos(radLat)*cos(degH);
+  double sinALT = (sin(radDEC)*sin(radLat))+(cos(radDEC)*cos(radLat)*cos(radH));
   double radALT = asin(sinALT);
+  double radCosALT = cos(radALT);
   double alt = degrees(radALT);
-
-  double y = -cos(radDEC)*cos(radLat)*sin(degH);
-  double x = sin(radDEC)-sin(radLat)*sinALT;
-  double a = atan2(x,y);
-  double b = degrees(a);
-  double c = 0;
-  if(x < 0.0000){
-    c = b + 180.0000;
-  }else if(x > 0.0000 & y < 0.0000){
-    c = b + 360.0000;
+  double cosAZ = (sin(radDEC) - (sin(radLat) * sinALT))/ (cos(radLat)* radCosALT);
+  double az = degrees(acos(cosAZ));
+  double sinH = sin(radH);
+  if(sinH > 0.0){
+    az = 360.0 - az;
   }
   
-  double az = c;
-
-  if(c < 0.0000){
-    az = c + 360.0000;
-  }else{
-    az = c;
-  }
   targetALT = alt;
   targetAZ = az;
   
@@ -290,7 +269,9 @@ void reportcurrentRADEC(){
     cl.write(zero);
     cl.write(zero);
     //RA
-    unsigned int cra = RADouble2stellarium(currentRA);
+    unsigned int cra = RADouble2stellarium(currentRA/15.0);
+    Serial.print("cra = ");
+    Serial.println(cra);
     byte l0 = cra;
     byte l1 = (cra>>8);
     byte h0 = (cra>>16);
