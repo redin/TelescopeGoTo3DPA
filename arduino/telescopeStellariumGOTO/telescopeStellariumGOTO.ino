@@ -26,7 +26,7 @@ const double stepsPerDegreeAZ = stepsOne/360.0;
 const double stepsPerDegreeALT = stepsOne/90.0;
 const double degreesPerStepAZ = 360.0/stepsOne;
 const double degreesPerStepALT = 90.0/stepsOne;
-const int maxSpeed = 400;
+int maxSpeed = 400;
 
 Stepper stepperAZ(stepsPerRevolution, D1,D2,D3,D4);            
 Stepper stepperALT(stepsPerRevolution, D5,D6,D7,D8);
@@ -35,8 +35,8 @@ WiFiClient cl;
 double latitudeDEC=-30.042140;
 double longitudeDEC=-51.210638;
 boolean parked = true;
-long deltaAZsteps = 0;
-long deltaALTsteps = 0;
+int deltaAZsteps = 0;
+int deltaALTsteps = 0;
 unsigned int ra = 0;
 int dec = 0;
 double lst;
@@ -57,24 +57,21 @@ double mapDouble(double x, double in_min, double in_max, double out_min, double 
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-unsigned int mapUint(double x, double in_min, double in_max, unsigned int out_min, unsigned int out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
 double stellariumRA2Double(unsigned int intRA){
-  return mapDouble(intRA, 0x0, 0x100000000, 0.0, 24.0);
+  return mapDouble(intRA, 0x0, 0x100000000, 0.00000, 24.00000);
 }
 
 double stellariumDEC2Double(int intDEC){
-  return mapDouble(intDEC, -0x40000000, 0x40000000, -90.0, 90.0);
+  return mapDouble(intDEC, -0x40000000, 0x40000000, -90.00000, 90.00000);
 }
 
 unsigned int RADouble2stellarium(double raDouble){
-  return mapUint(raDouble, 0.0, 360.0, 0x80000000, 0x100000000);
+  return (unsigned int) mapDouble(raDouble, 0.00000, 24.00000, 0x0, 0x100000000);
 }
 
-int DECDouble2stellarium(double DECDouble){
-  return map(DECDouble, -90.0, 90.0, -0x40000000, 0x40000000);
+signed int DECDouble2stellarium(double DECDouble){
+  
+  return (signed int) mapDouble(DECDouble, -90.00000, 90.00000, -0x40000000, 0x40000000);
 }
 
 void setup() {
@@ -156,38 +153,39 @@ double calcDaysSinceJ2000(){
 void calculateLST(){
   //LST = 100.46 + 0.985647 * d + long + 15*UT
   double daysJ2000 = calcDaysSinceJ2000(); 
-  lst = (0.985647 * daysJ2000) + (15.0000 * decimalTime) + longitudeDEC + 100.460000;
-  while(lst >360.0000){
+  lst = (0.985647 * daysJ2000) + (15.00000 * decimalTime) + longitudeDEC + 100.460000;
+  while(lst >360.00000){
     lst-= 360.00000;
   }
   while(lst < 0.0000){
     lst+= 360.00000;
   }
   Serial.print("LST = ");
-  Serial.println(mapDouble(lst, 0.0, 360.0, 0.0, 24.0),10);
+  Serial.println(mapDouble(lst, 0.00000, 360.00000, 0.00000, 24.00000),10);
 }
 
 void moveMount(){
   if(!parked){
-    deltaAZsteps = toSteps(targetAZ - currentAZ, false);
+    deltaAZsteps = toSteps(targetAZ - currentAZ, false);   
     deltaALTsteps = toSteps(targetALT - currentALT, true);
+    
     if(deltaAZsteps > 0){
-      //stepperAZ.setSpeed(min(deltaAZsteps, maxSpeed));
-      //stepperAZ.step(1);
-      //currentAZ+= degreesPerStepAZ;
+      stepperAZ.setSpeed(100);
+      stepperAZ.step(1);
+      currentAZ+= degreesPerStepAZ;
     }else if(deltaAZsteps < 0){
-      //stepperAZ.setSpeed(min(abs(deltaAZsteps), maxSpeed));
-      //stepperAZ.step(-1);
-      //currentAZ-= degreesPerStepAZ;
+      stepperAZ.setSpeed(100);
+      stepperAZ.step(-1);
+      currentAZ-= degreesPerStepAZ;
     }
     if(deltaALTsteps > 0){
-      //stepperALT.setSpeed(min(deltaALTsteps, maxSpeed));
-      //stepperALT.step(1);
-      //currentALT+= degreesPerStepALT;
+      stepperALT.setSpeed(100);
+      stepperALT.step(1);
+      currentALT+= degreesPerStepALT;
     }else if(deltaALTsteps < 0){
-      //stepperALT.setSpeed(min(abs(deltaALTsteps), maxSpeed));
-      //stepperALT.step(-1);
-      //currentALT-= degreesPerStepALT;
+      stepperALT.setSpeed(100);
+      stepperALT.step(-1);
+      currentALT-= degreesPerStepALT;
     }  
   }
 }
@@ -207,19 +205,14 @@ void currentALTAZ2RADEC(){
   double cosH = (sinAlt - (sinLat*sinCurDec))/(cos(radLat)*cos(radcurDec));
   double h = degrees(acos(cosH));
   double sinA = sin(radAZ);
-  if(sinA > 0.0){
-    h = 360.0 - h;
+  if(sinA > 0.000000){
+    h = 360.00000 - h;
   }
   double curRA = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - (h/15.0);
-  if(curRA < 0.0){
-    curRA = curRA + 24.0;
+  if(curRA < 0.00000){
+    curRA = curRA + 24.00000;
   }
-  
-  //Serial.print("DEC = ");
-  //Serial.println(curDec,10);
   currentDEC = curDec;
-  //Serial.print("RA = ");
-  //Serial.println(curRA,10);
   currentRA = curRA;
 }
 
@@ -237,12 +230,13 @@ void targetRADEC2ALTAZ(){
   double cosAZ = (sin(radDEC) - (sin(radLat) * sinALT))/ (cos(radLat)* radCosALT);
   double az = degrees(acos(cosAZ));
   double sinH = sin(radH);
-  if(sinH > 0.0){
-    az = 360.0 - az;
+  if(sinH > 0.00000){
+    az = 360.00000 - az;
   }
   
   targetALT = alt;
   targetAZ = az;
+  parked = false;
   
 }
 
@@ -269,7 +263,7 @@ void reportcurrentRADEC(){
     cl.write(zero);
     cl.write(zero);
     //RA
-    unsigned int cra = RADouble2stellarium(currentRA/15.0);
+    unsigned int cra = RADouble2stellarium(currentRA);
     Serial.print("cra = ");
     Serial.println(cra);
     byte l0 = cra;
@@ -344,7 +338,7 @@ void loop() {
   }else{
     readTargetRADEC();
   }
-  if(currentMilis > (previousMilis + 1000)){
+  if(currentMilis > (previousMilis + 500)){
     previousMilis = currentMilis;
     timeClient.update();
     decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
@@ -352,7 +346,7 @@ void loop() {
     targetRADEC2ALTAZ();
     currentALTAZ2RADEC();
     reportcurrentRADEC();
-    Serial.println(timeClient.getFormattedTime());
+    //Serial.println(timeClient.getFormattedTime());
     Serial.print("targetDEC = ");
     Serial.println(targetDEC,10);
     Serial.print("targetRA = ");
@@ -369,6 +363,10 @@ void loop() {
     Serial.println(currentALT,10);
     Serial.print("currentAZ = ");
     Serial.println(currentAZ,10);
+    Serial.print("deltaALTsteps = ");
+    Serial.println(deltaALTsteps,10);
+    Serial.print("deltaAZsteps = ");
+    Serial.println(deltaAZsteps,10);
   }
   moveMount();
 }
