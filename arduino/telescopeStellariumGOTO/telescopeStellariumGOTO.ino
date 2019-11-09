@@ -90,21 +90,23 @@ int toSteps(double value, boolean alt){
   }
 }
 
-void senddeltaSteps(){
-  if(!parked){
-    Serial.print("AZ");
-    Serial.println(toSteps(deltaAZ,false));
-    Serial.print("AL");
-    Serial.println(toSteps(deltaALT,true));
-  }else{
+void sendDeltaSteps(){
+  int stepsAZ = toSteps(deltaAZ,false);
+  int stepsALT = toSteps(deltaALT,true);
+  if(parked){
     Serial.println("UP");
-    Serial.print("AZ");
-    Serial.println(toSteps(deltaAZ,false));
-    Serial.print("AL");
-    Serial.println(toSteps(deltaALT,true));
+    parked = false;
   }
-  currentAZ = targetAZ;
-  currentALT = targetALT;
+  if(stepsAZ != 0){
+    Serial.print("AZ");
+    Serial.println(stepsAZ);
+    currentAZ = targetAZ;
+  }
+  if(stepsALT != 0){
+    Serial.print("AL");
+    Serial.println(stepsALT);
+    currentALT = targetALT;
+  }
 }
 
 void setup() {
@@ -320,6 +322,6 @@ void loop() {
   //Send message to move mount
   calcDeltas();
   if(deltaAZ > 0.0000 || deltaAZ < 0.0000 || deltaALT > 0.0000 || deltaALT < 0.0000){
-    senddeltaSteps();
+    sendDeltaSteps();
   }
 }
