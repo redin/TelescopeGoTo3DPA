@@ -6,8 +6,8 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 
-const char *ssid     = "helium";
-const char *password = "digitel01?";
+const char *ssid     = "network";
+const char *password = "password?";
 const int epoch2jd = 946684800;
 
 const int stepsPerRevolution = 4096;
@@ -40,6 +40,9 @@ double targetALT=0;
 double targetAZ=0;
 double currentALT=0;
 double currentAZ=0;
+boolean parked = true;
+double deltaAZ = 0.00000;
+double deltaALT = 0.0000;
 
 unsigned long currentMilis=0;
 unsigned long previousMilis=0;
@@ -66,12 +69,42 @@ signed int DECDouble2stellarium(double DECDouble){
   return (signed int) mapDouble(DECDouble, -90.00000, 90.00000, -0x40000000, 0x40000000);
 }
 
+void calcDeltas(){
+  if((currentAZ - targetAZ) > (targetAZ - currentAZ)){
+    deltaAZ = targetAZ - currentAZ;
+  }else{
+    deltaAZ = currentAZ - targetAZ;
+  }
+  if((currentALT - targetALT) > (targetALT - currentALT)){
+    deltaALT = targetALT - currentALT;
+  }else{
+    deltaALT = currentALT - targetALT;
+  }
+}
+
 int toSteps(double value, boolean alt){
   if(alt){
     return value * stepsPerDegreeALT;
   }else{
     return value * stepsPerDegreeAZ;
   }
+}
+
+void senddeltaSteps(){
+  if(!parked){
+    Serial.print("AZ");
+    Serial.println(toSteps(deltaAZ,false));
+    Serial.print("AL");
+    Serial.println(toSteps(deltaALT,true));
+  }else{
+    Serial.println("UP");
+    Serial.print("AZ");
+    Serial.println(toSteps(deltaAZ,false));
+    Serial.print("AL");
+    Serial.println(toSteps(deltaALT,true));
+  }
+  currentAZ = targetAZ;
+  currentALT = targetALT;
 }
 
 void setup() {
@@ -86,10 +119,6 @@ void setup() {
 
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
-  
-//  if (MDNS.begin("esp8266")) {
-//    Serial.println("MDNS responder started");
-//  }
 
   server.begin();
   Serial.println("TCP server started");
@@ -113,8 +142,8 @@ void calculateLST(){
   while(lst < 0.0000){
     lst+= 360.00000;
   }
-  Serial.print("LST = ");
-  Serial.println(mapDouble(lst, 0.00000, 360.00000, 0.00000, 24.00000),10);
+//  Serial.print("LST = ");
+//  Serial.println(mapDouble(lst, 0.00000, 360.00000, 0.00000, 24.00000),10);
 }
 
 
@@ -279,14 +308,18 @@ void loop() {
 //    Serial.println(targetALT,10);
 //    Serial.print("targetAZ = ");
 //    Serial.println(targetAZ,10);
-    Serial.print("currentDEC = ");
-    Serial.println(currentDEC,10);
-    Serial.print("currentRA = ");
-    Serial.println(currentRA,10);
-    Serial.print("currentALT = ");
-    Serial.println(currentALT,10);
-    Serial.print("currentAZ = ");
-    Serial.println(currentAZ,10);
+//    Serial.print("currentDEC = ");
+//    Serial.println(currentDEC,10);
+//    Serial.print("currentRA = ");
+//    Serial.println(currentRA,10);
+//    Serial.print("currentALT = ");
+//    Serial.println(currentALT,10);
+//    Serial.print("currentAZ = ");
+//    Serial.println(currentAZ,10);
   }
   //Send message to move mount
+  calcDeltas();
+  if(deltaAZ > 0.0000 || deltaAZ < 0.0000 || deltaALT > 0.0000 || deltaALT < 0.0000){
+    senddeltaSteps();
+  }
 }
