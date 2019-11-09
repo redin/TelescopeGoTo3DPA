@@ -1,17 +1,22 @@
 #include <math.h>
-#include <Stepper.h>
 #include <NTPClient.h>
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
-//#include <ESP8266mDNS.h>
-#include <ArduinoOTA.h>
 
-const char *ssid     = "network";
-const char *password = "password?";
+const char *ssid     = "helium";
+const char *password = "digitel01?";
 const int epoch2jd = 946684800;
+
+const int stepsPerRevolution = 4096;
+const double AZRange = 360.00000;
+const double ALTRange = 90.00000;
+const double stepsPerDegreeAZ = stepsPerRevolution/AZRange;
+const double stepsPerDegreeALT = stepsPerRevolution/ALTRange;
+const double degreesPerStepAZ = AZRange/stepsPerRevolution;
+const double degreesPerStepALT = ALTRange/stepsPerRevolution;
 
 WiFiUDP ntpUDP;
 const int port = 10001;
@@ -20,23 +25,10 @@ WiFiServer server(port);
 NTPClient timeClient(ntpUDP);
 const int timeOffset = 0;
 
-const int stepsPerRevolution = 32;
-const int stepsOne = 2048;
-const double stepsPerDegreeAZ = stepsOne/360.0;
-const double stepsPerDegreeALT = stepsOne/90.0;
-const double degreesPerStepAZ = 360.0/stepsOne;
-const double degreesPerStepALT = 90.0/stepsOne;
-int maxSpeed = 400;
-
-Stepper stepperAZ(stepsPerRevolution, D1,D2,D3,D4);            
-Stepper stepperALT(stepsPerRevolution, D5,D6,D7,D8);
 WiFiClient cl;
 
 double latitudeDEC=-30.042140;
 double longitudeDEC=-51.210638;
-boolean parked = true;
-int deltaAZsteps = 0;
-int deltaALTsteps = 0;
 unsigned int ra = 0;
 int dec = 0;
 double lst;
@@ -74,6 +66,14 @@ signed int DECDouble2stellarium(double DECDouble){
   return (signed int) mapDouble(DECDouble, -90.00000, 90.00000, -0x40000000, 0x40000000);
 }
 
+int toSteps(double value, boolean alt){
+  if(alt){
+    return value * stepsPerDegreeALT;
+  }else{
+    return value * stepsPerDegreeAZ;
+  }
+}
+
 void setup() {
 
   Serial.begin (115200);
@@ -84,45 +84,6 @@ void setup() {
     Serial.print ( "." );
   }
 
-  // Hostname defaults to esp8266-[ChipID]
-  // ArduinoOTA.setHostname("myesp8266");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword("admin");
-
-  ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH) {
-      type = "sketch";
-    } else { // U_SPIFFS
-      type = "filesystem";
-    }
-
-    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-    Serial.println("Start updating " + type);
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
-    } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
-    } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
-    } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
-    } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
-    }
-  });
-  ArduinoOTA.begin();
-  
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
   
@@ -134,14 +95,6 @@ void setup() {
   Serial.println("TCP server started");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());  
-}
-
-int toSteps(double value, boolean alt){
-  if(alt){
-    return value * stepsPerDegreeALT;
-  }else{
-    return value * stepsPerDegreeAZ;
-  }
 }
 
 double calcDaysSinceJ2000(){
@@ -164,31 +117,6 @@ void calculateLST(){
   Serial.println(mapDouble(lst, 0.00000, 360.00000, 0.00000, 24.00000),10);
 }
 
-void moveMount(){
-  if(!parked){
-    deltaAZsteps = toSteps(targetAZ - currentAZ, false);   
-    deltaALTsteps = toSteps(targetALT - currentALT, true);
-    
-    if(deltaAZsteps > 0){
-      stepperAZ.setSpeed(100);
-      stepperAZ.step(1);
-      currentAZ+= degreesPerStepAZ;
-    }else if(deltaAZsteps < 0){
-      stepperAZ.setSpeed(100);
-      stepperAZ.step(-1);
-      currentAZ-= degreesPerStepAZ;
-    }
-    if(deltaALTsteps > 0){
-      stepperALT.setSpeed(100);
-      stepperALT.step(1);
-      currentALT+= degreesPerStepALT;
-    }else if(deltaALTsteps < 0){
-      stepperALT.setSpeed(100);
-      stepperALT.step(-1);
-      currentALT-= degreesPerStepALT;
-    }  
-  }
-}
 
 //to convert the current telescope position to RADEC to pass to stellarium
 void currentALTAZ2RADEC(){
@@ -236,7 +164,6 @@ void targetRADEC2ALTAZ(){
   
   targetALT = alt;
   targetAZ = az;
-  parked = false;
   
 }
 
@@ -264,8 +191,6 @@ void reportcurrentRADEC(){
     cl.write(zero);
     //RA
     unsigned int cra = RADouble2stellarium(currentRA);
-    Serial.print("cra = ");
-    Serial.println(cra);
     byte l0 = cra;
     byte l1 = (cra>>8);
     byte h0 = (cra>>16);
@@ -331,7 +256,6 @@ void readTargetRADEC(){
 
 void loop() {
   currentMilis=millis();
-  ArduinoOTA.handle();
   //MDNS.update();
   if(cl == NULL){
     cl = server.available();
@@ -347,14 +271,14 @@ void loop() {
     currentALTAZ2RADEC();
     reportcurrentRADEC();
     //Serial.println(timeClient.getFormattedTime());
-    Serial.print("targetDEC = ");
-    Serial.println(targetDEC,10);
-    Serial.print("targetRA = ");
-    Serial.println(targetRA,10);
-    Serial.print("targetALT = ");
-    Serial.println(targetALT,10);
-    Serial.print("targetAZ = ");
-    Serial.println(targetAZ,10);
+//    Serial.print("targetDEC = ");
+//    Serial.println(targetDEC,10);
+//    Serial.print("targetRA = ");
+//    Serial.println(targetRA,10);
+//    Serial.print("targetALT = ");
+//    Serial.println(targetALT,10);
+//    Serial.print("targetAZ = ");
+//    Serial.println(targetAZ,10);
     Serial.print("currentDEC = ");
     Serial.println(currentDEC,10);
     Serial.print("currentRA = ");
@@ -363,10 +287,6 @@ void loop() {
     Serial.println(currentALT,10);
     Serial.print("currentAZ = ");
     Serial.println(currentAZ,10);
-    Serial.print("deltaALTsteps = ");
-    Serial.println(deltaALTsteps,10);
-    Serial.print("deltaAZsteps = ");
-    Serial.println(deltaAZsteps,10);
   }
-  moveMount();
+  //Send message to move mount
 }
