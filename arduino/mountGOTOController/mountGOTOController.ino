@@ -33,7 +33,6 @@ void moveMount(){
         deltaALTsteps++;
         Serial.println(deltaALTsteps);
       }
-       
     } 
   }
 }
@@ -49,14 +48,44 @@ void serialEvent() {
 }
 
 void setup(){
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
   Serial.begin (115200);
   inputString.reserve(200);
+}
+
+void align(){
+  int potAZ = map(analogRead(A0),0,1024,-512,512);
+  int potALT = map(analogRead(A1),0,1024,-512,512);
+//  Serial.print("potAZ ");
+//  Serial.println(potAZ);
+//  Serial.print("potALT ");
+//  Serial.println(potALT);
+  if( stepperAZ.stepsToGo() == 0 ){
+    if(potAZ < -150){
+      stepperAZ.move(-1);
+      Serial.println("AZ-");
+    }else if(potAZ > 150){
+      stepperAZ.move(1);
+      Serial.println("AZ+");
+    }
+  }
+  if( stepperALT.stepsToGo() == 0 ){
+    if(potALT < -150){
+      stepperALT.move(-1);
+      Serial.println("ALT-");
+    }else if(potALT > 150){
+      stepperALT.move(1);
+      Serial.println("ALT+");
+    }
+  }
 }
 
 void loop(){
   stepperAZ.run();
   stepperALT.run();
   moveMount();
+  align();
   if (stringComplete) {
     String cmd = inputString;
     inputString = "";
