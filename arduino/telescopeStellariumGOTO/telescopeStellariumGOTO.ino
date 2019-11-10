@@ -10,7 +10,7 @@ const char *ssid     = "network";
 const char *password = "password?";
 const int epoch2jd = 946684800;
 
-const int stepsPerRevolution = 4096;
+const int stepsPerRevolution = 40960;
 const double AZRange = 360.00000;
 const double ALTRange = 90.00000;
 const double stepsPerDegreeAZ = stepsPerRevolution/AZRange;
@@ -41,6 +41,7 @@ double targetAZ=0;
 double currentALT=0;
 double currentAZ=0;
 boolean parked = true;
+boolean aligned = false;
 double deltaAZ = 0.00000;
 double deltaALT = 0.0000;
 
@@ -70,16 +71,18 @@ signed int DECDouble2stellarium(double DECDouble){
 }
 
 void calcDeltas(){
-  if((currentAZ - targetAZ) > (targetAZ - currentAZ)){
-    deltaAZ = targetAZ - currentAZ;
-  }else{
-    deltaAZ = currentAZ - targetAZ;
-  }
-  if((currentALT - targetALT) > (targetALT - currentALT)){
-    deltaALT = targetALT - currentALT;
-  }else{
-    deltaALT = currentALT - targetALT;
-  }
+  deltaAZ = targetAZ - currentAZ;
+  deltaALT = targetALT - currentALT;
+//  if((currentAZ - targetAZ) > (targetAZ - currentAZ)){
+//    deltaAZ = targetAZ - currentAZ;
+//  }else{
+//    deltaAZ = currentAZ - targetAZ;
+//  }
+//  if((currentALT - targetALT) > (targetALT - currentALT)){
+//    deltaALT = targetALT - currentALT;
+//  }else{
+//    deltaALT = currentALT - targetALT;
+//  }
 }
 
 int toSteps(double value, boolean alt){
@@ -93,16 +96,16 @@ int toSteps(double value, boolean alt){
 void sendDeltaSteps(){
   int stepsAZ = toSteps(deltaAZ,false);
   int stepsALT = toSteps(deltaALT,true);
-  if(parked){
+  if(aligned && parked){
     Serial.println("UP");
     parked = false;
   }
-  if(stepsAZ != 0){
+  if(stepsAZ != 0 && !parked){
     Serial.print("AZ");
     Serial.println(stepsAZ);
     currentAZ = targetAZ;
   }
-  if(stepsALT != 0){
+  if(stepsALT != 0 && !parked){
     Serial.print("AL");
     Serial.println(stepsALT);
     currentALT = targetALT;
@@ -110,7 +113,7 @@ void sendDeltaSteps(){
 }
 
 void setup() {
-
+  pinMode(D1, INPUT);
   Serial.begin (115200);
   WiFi.begin(ssid, password);
 
@@ -285,15 +288,29 @@ void readTargetRADEC(){
   }
 }
 
+void align(){
+  boolean ualigned = digitalRead(D1);
+//  Serial.print("ualigned ");
+//  Serial.println(ualigned);
+  if(ualigned){
+    currentAZ = targetAZ;
+    currentALT = targetALT;
+    deltaAZ = 0.00000;
+    deltaALT = 0.0000;
+    aligned = true;
+    Serial.println("UP");
+    parked = false;
+  }
+}
+
 void loop() {
   currentMilis=millis();
-  //MDNS.update();
   if(cl == NULL){
     cl = server.available();
   }else{
     readTargetRADEC();
   }
-  if(currentMilis > (previousMilis + 500)){
+  if(currentMilis > (previousMilis + 250)){
     previousMilis = currentMilis;
     timeClient.update();
     decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
@@ -321,7 +338,10 @@ void loop() {
   }
   //Send message to move mount
   calcDeltas();
-  if(deltaAZ > 0.0000 || deltaAZ < 0.0000 || deltaALT > 0.0000 || deltaALT < 0.0000){
+  if(!aligned){
+    align();
+  }
+  if(!parked && (deltaAZ > 0.0000 || deltaAZ < 0.0000 || deltaALT > 0.0000 || deltaALT < 0.0000)){
     sendDeltaSteps();
   }
 }
