@@ -1,13 +1,15 @@
 #include <math.h>
-#include <NTPClient.h>
-#include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
-#include <ESP8266HTTPClient.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
 
-const char *ssid     = "network";
-const char *password = "password?";
+#include <ESP8266WiFi.h>
+//#include <WiFiUdp.h>
+//#include <ESP8266HTTPClient.h>
+//#include <WiFiClient.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>
+#include <NTPClient.h>
+#include <ESP8266mDNS.h>
+
 const int epoch2jd = 946684800;
 
 const int stepsPerRevolution = 40960;
@@ -29,6 +31,7 @@ WiFiClient cl;
 
 double latitudeDEC=-30.042140;
 double longitudeDEC=-51.210638;
+int ledState = LOW;
 unsigned int ra = 0;
 int dec = 0;
 double lst;
@@ -112,18 +115,44 @@ void sendDeltaSteps(){
   }
 }
 
+void configModeCallback (WiFiManager *myWiFiManager) {
+  Serial.println("Entered config mode");
+  Serial.println(WiFi.softAPIP());
+  //if you used auto generated SSID, print it
+  Serial.println(myWiFiManager->getConfigPortalSSID());
+}
+
 void setup() {
   pinMode(D1, INPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin (115200);
-  WiFi.begin(ssid, password);
+//  WiFi.begin(ssid, password);
+//
+//  while ( WiFi.status() != WL_CONNECTED ) {
+//    delay ( 500 );
+//    Serial.print ( "." );
+//  }
 
-  while ( WiFi.status() != WL_CONNECTED ) {
-    delay ( 500 );
-    Serial.print ( "." );
-  }
+  WiFiManager wifiManager;
+  wifiManager.setAPCallback(configModeCallback);
+  if(!wifiManager.autoConnect("telescope","GOTO3DPA")) {
+    Serial.println("failed to connect and hit timeout");
+    //reset and try again, or maybe put it to deep sleep
+    ESP.reset();
+    delay(1000);
+  } 
 
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
+
+  if (!MDNS.begin("telescope")) {
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
+  MDNS.addService("telescope", "tcp", 10001);
 
   server.begin();
   Serial.println("TCP server started");
@@ -300,6 +329,11 @@ void align(){
     aligned = true;
     Serial.println("UP");
     parked = false;
+  }else{
+    currentAZ = targetAZ;
+    currentALT = targetALT;
+    deltaAZ = 0.00000;
+    deltaALT = 0.0000;
   }
 }
 
@@ -312,7 +346,14 @@ void loop() {
   }
   if(currentMilis > (previousMilis + 250)){
     previousMilis = currentMilis;
+    if (ledState == LOW) {
+      ledState = HIGH;
+    } else {
+      ledState = LOW;
+    }
+    digitalWrite(LED_BUILTIN, ledState);
     timeClient.update();
+    MDNS.update();
     decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
     calculateLST();
     targetRADEC2ALTAZ();
