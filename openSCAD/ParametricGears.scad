@@ -8,7 +8,7 @@ include <MCAD/involute_gears.scad>
 
 
 // WHAT TO GENERATE?
-generate = 1;    // GENERATE BOTH GEARS FOR VIEWING
+generate = 2;    // GENERATE BOTH GEARS FOR VIEWING
 // generate = 1;    // GENERATE STEPPER GEAR FOR PRINTING
 // generate = 2;    // GENERATE DRIVE GEAR FOR PRINTING
 
@@ -231,7 +231,7 @@ if(generate == 1)
 }
 else if(generate == 2)
 {
-    !union(){
+    union(){
         $fs=0.3;
         $fa=0.5;
         difference(){
@@ -265,7 +265,7 @@ else if(generate == 2)
         rotate([90,0,240])translate([58,15.4,-15])cube([7,2.7,30]);
    }
 //    translate([-34.5,0,15.05])rotate([180,0,0])gearsbyteethanddistance(t1 = gear1_teeth, t2=gear2_teeth, d=distance_between_axels, which=1);
-   union(){
+   !union(){
        $fs=0.3;
        $fa=0.5;
        translate([0,0,-18])difference(){
@@ -286,11 +286,11 @@ else if(generate == 2)
            translate([30,-35,-0.1])cylinder(d=5,h=15);
            translate([-30,-35,-0.1])cylinder(d=5,h=15);
            rotate([0,0,0])translate([54,0,11])rotate([0,90,0])cylinder(d=12,h=8);
-           rotate([0,0,0])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=25);
+           rotate([0,0,0])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=20);
            rotate([0,0,120])translate([54,0,11])rotate([0,90,0])cylinder(d=12,h=8);
-           rotate([0,0,120])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=25);
+           rotate([0,0,120])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=20);
            rotate([0,0,240])translate([54,0,11])rotate([0,90,0])cylinder(d=12,h=8);
-           rotate([0,0,240])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=25);
+           rotate([0,0,240])translate([35,0,11])rotate([0,90,0])cylinder(d=3,h=20);
        }
        translate([0,0,-3.1])difference(){
            cylinder(d=20,h=12);
