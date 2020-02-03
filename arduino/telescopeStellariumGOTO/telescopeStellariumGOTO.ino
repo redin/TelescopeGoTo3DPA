@@ -32,8 +32,6 @@ WiFiClient cl;
 double latitudeDEC=-30.042140;
 double longitudeDEC=-51.210638;
 int ledState = LOW;
-unsigned int ra = 0;
-int dec = 0;
 double lst;
 double targetRA=0;
 double targetDEC=0;
@@ -134,14 +132,25 @@ void setup() {
 //  }
 
   WiFiManager wifiManager;
+  char latCA[20] = "-30.042140";
+  char longCA[20] = "-51.210638";
+  WiFiManagerParameter latitude("latitude", "-30.042140", latCA, 20);
+  WiFiManagerParameter longitude("longitude", "-51.210638", longCA, 20);
+  wifiManager.addParameter(&latitude);
+  wifiManager.addParameter(&longitude);
   wifiManager.setAPCallback(configModeCallback);
   if(!wifiManager.autoConnect("telescope","GOTO3DPA")) {
     Serial.println("failed to connect and hit timeout");
     //reset and try again, or maybe put it to deep sleep
     ESP.reset();
     delay(1000);
-  } 
+  }
 
+  String latStr = String(latitude.getValue());
+  String longStr = String(longitude.getValue());
+  latitudeDEC = latStr.toDouble();
+  longitudeDEC = longStr.toDouble();
+  
   timeClient.setTimeOffset(timeOffset);
   timeClient.begin();
 
@@ -232,7 +241,7 @@ void targetRADEC2ALTAZ(){
 
 void reportcurrentRADEC(){
   if(cl.connected()){
-    double epoch =  timeClient.getEpochTime();
+    //double epoch =  timeClient.getEpochTime();
     byte zero = 0x0;
     byte s = 0x18;
     short tp = 0;
@@ -282,6 +291,8 @@ void reportcurrentRADEC(){
 
 void readTargetRADEC(){
   if(cl.connected()){
+    unsigned int ra = 0;
+    int dec = 0;
     while(cl.available()>0){
       short s = 0;
       short tp = 0;
