@@ -4,18 +4,20 @@
 // Thanks to Greg Frost for his great "Involute Gears" script.
 //
 // Licensed under the BSD license.
+$fa = .3;	// minimum angle 
+$fs = .3;	// minimum size
 include <MCAD/involute_gears.scad> 
 
 
 // WHAT TO GENERATE?
-generate = 1;    // GENERATE BOTH GEARS FOR VIEWING
+generate = 2;    // GENERATE BOTH GEARS FOR VIEWING
 // generate = 1;    // GENERATE STEPPER GEAR FOR PRINTING
 // generate = 2;    // GENERATE DRIVE GEAR FOR PRINTING
 
 // OPTIONS COMMON TO BOTH GEARS:
 distance_between_axels = 65;
 gear_h = 15;
-gear_shaft_h = 15;
+gear_shaft_h = 12;
 
 
 // GEAR1 (SMALLER GEAR, STEPPER GEAR) OPTIONS:
@@ -45,11 +47,11 @@ gear2_shaft_outer_r  = gear2_shaft_outer_d/2;
 gear2_bolt_hex_d       = 3;
 gear2_bolt_hex_r        = gear2_bolt_hex_d/2;
 // gear2_bolt_sink: How far down the gear shaft the bolt head sits; measured as distance from drive end of gear.
-gear2_bolt_sink          = 3;		
+gear2_bolt_sink          = 5;		
 // gear2's shaft is a bridge above the hex bolt shaft; this creates 1/3bridge_helper_h sized steps at top of shaft to help bridging.  (so bridge_helper_h/3 should be > layer height to have any effect)
-bridge_helper_h=3;
+bridge_helper_h=1;
 
-gear2_rim_margin = 3;
+gear2_rim_margin = 5;
 gear2_cut_circles  = 3;
 
 // gear2 setscrew option; not likely needed.
@@ -63,7 +65,7 @@ gear2_captive_nut_h = 3;
 
 
 // Tolerances for geometry connections.
-AT=0.02;
+AT=0.025;
 ST=AT*2;
 TT=AT/2;
 
