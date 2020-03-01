@@ -121,7 +121,7 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 }
 
 void setup() {
-  pinMode(D1, INPUT);
+  pinMode(D1, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin (115200);
 //  WiFi.begin(ssid, password);
@@ -172,7 +172,7 @@ void setup() {
 double calcDaysSinceJ2000(){
   double epoch =  timeClient.getEpochTime();
   double seconds = (epoch - epoch2jd);
-  return seconds / 86400;
+  return seconds / 86400.00000;
 }
 
 void calculateLST(){
@@ -208,7 +208,7 @@ void currentALTAZ2RADEC(){
   if(sinA > 0.000000){
     h = 360.00000 - h;
   }
-  double curRA = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - (h/15.0);
+  double curRA = mapDouble(lst, 0.0000, 360.0000, 0.0000, 24.0000) - (h/15.00000);
   if(curRA < 0.00000){
     curRA = curRA + 24.00000;
   }
@@ -330,9 +330,9 @@ void readTargetRADEC(){
 
 void align(){
   boolean ualigned = digitalRead(D1);
-//  Serial.print("ualigned ");
-//  Serial.println(ualigned);
-  if(ualigned){
+  //Serial.print("ualigned ");
+  //Serial.println(ualigned);
+  if(!ualigned){
     currentAZ = targetAZ;
     currentALT = targetALT;
     deltaAZ = 0.00000;
@@ -355,7 +355,7 @@ void loop() {
   }else{
     readTargetRADEC();
   }
-  if(currentMilis > (previousMilis + 250)){
+  if(currentMilis > (previousMilis + 100)){
     previousMilis = currentMilis;
     if (ledState == LOW) {
       ledState = HIGH;
@@ -387,6 +387,7 @@ void loop() {
 //    Serial.println(currentALT,10);
 //    Serial.print("currentAZ = ");
 //    Serial.println(currentAZ,10);
+      //Serial.println(aligned);
   }
   //Send message to move mount
   calcDeltas();

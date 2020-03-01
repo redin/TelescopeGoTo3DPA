@@ -38,7 +38,7 @@ void moveMount(){
 }
 
 void serialEvent() {
-  while (Serial.available()) {
+  while (Serial.available() && !stringComplete) {
     char inChar = (char)Serial.read();
     inputString += inChar;
     if (inChar == '\n') {
@@ -52,6 +52,7 @@ void setup(){
   pinMode(A1, INPUT);
   Serial.begin (115200);
   inputString.reserve(200);
+  stringComplete = false;
 }
 
 void align(){
