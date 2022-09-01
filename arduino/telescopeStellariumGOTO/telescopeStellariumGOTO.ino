@@ -1,9 +1,6 @@
 #include <math.h>
 
 #include <ESP8266WiFi.h>
-//#include <WiFiUdp.h>
-//#include <ESP8266HTTPClient.h>
-//#include <WiFiClient.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
@@ -67,7 +64,6 @@ unsigned int RADouble2stellarium(double raDouble){
 }
 
 signed int DECDouble2stellarium(double DECDouble){
-  
   return (signed int) mapDouble(DECDouble, -90.00000, 90.00000, -0x40000000, 0x40000000);
 }
 
@@ -124,12 +120,6 @@ void setup() {
   pinMode(D1, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin (115200);
-//  WiFi.begin(ssid, password);
-//
-//  while ( WiFi.status() != WL_CONNECTED ) {
-//    delay ( 500 );
-//    Serial.print ( "." );
-//  }
 
   WiFiManager wifiManager;
   char latCA[20] = "-30.042140";
@@ -185,8 +175,6 @@ void calculateLST(){
   while(lst < 0.0000){
     lst+= 360.00000;
   }
-//  Serial.print("LST = ");
-//  Serial.println(mapDouble(lst, 0.00000, 360.00000, 0.00000, 24.00000),10);
 }
 
 
@@ -330,8 +318,6 @@ void readTargetRADEC(){
 
 void align(){
   boolean ualigned = digitalRead(D1);
-  //Serial.print("ualigned ");
-  //Serial.println(ualigned);
   if(!ualigned){
     currentAZ = targetAZ;
     currentALT = targetALT;
@@ -357,15 +343,9 @@ void loop() {
   }
   if(currentMilis > (previousMilis + 100)){
     previousMilis = currentMilis;
-    if (ledState == LOW) {
-      ledState = HIGH;
-    } else {
-      ledState = LOW;
-    }
-    digitalWrite(LED_BUILTIN, ledState);
     timeClient.update();
-    MDNS.update();
-    decimalTime =(double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
+    
+    decimalTime= (double)timeClient.getHours()+(double)(timeClient.getMinutes()/60.0000)+(double)(timeClient.getSeconds()/3600.000000);
     calculateLST();
     targetRADEC2ALTAZ();
     currentALTAZ2RADEC();
@@ -388,6 +368,13 @@ void loop() {
 //    Serial.print("currentAZ = ");
 //    Serial.println(currentAZ,10);
       //Serial.println(aligned);
+      MDNS.update();
+      if (ledState == LOW) {
+        ledState = HIGH;
+      } else {
+        ledState = LOW;
+      }
+      digitalWrite(LED_BUILTIN, ledState);
   }
   //Send message to move mount
   calcDeltas();

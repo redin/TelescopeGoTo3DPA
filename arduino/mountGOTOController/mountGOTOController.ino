@@ -58,10 +58,6 @@ void setup(){
 void align(){
   int potAZ = map(analogRead(A0),0,1024,-512,512);
   int potALT = map(analogRead(A1),0,1024,-512,512);
-//  Serial.print("potAZ ");
-//  Serial.println(potAZ);
-//  Serial.print("potALT ");
-//  Serial.println(potALT);
   if( stepperAZ.stepsToGo() == 0 ){
     if(potAZ < -150){
       stepperAZ.move(-1);
