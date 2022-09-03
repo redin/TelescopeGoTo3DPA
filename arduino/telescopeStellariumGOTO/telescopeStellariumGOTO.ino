@@ -37,7 +37,6 @@ boolean aligned = false;
 String inputString = "";
 bool stringComplete = false;
 
-
 unsigned long currentMilis=0;
 unsigned long previousMilis=0;
 double decimalTime;
@@ -66,11 +65,11 @@ void sendTarget(){
 
   if(fabs(targetAZ - currentAZ) > 0.001){
     Serial.print("AZ");
-    Serial.println(targetAZ);
+    Serial.println(targetAZ, 6);
   }
   if(fabs(targetALT - currentALT) > 0.001){
     Serial.print("AL");
-    Serial.println(targetALT);
+    Serial.println(targetALT, 6);
   }
   
 }

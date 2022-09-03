@@ -1,38 +1,66 @@
-#include <Unistep2.h>
+#include <AccelStepper.h>
 
-const int stepsPerRevolution = 4096;
+// Define pin connections
+const int dirPinAZ = 2;
+const int dirPinALT = 4;
+const int stepPinAZ = 3;
+const int stepPinALT = 5;
+
+// Creates instances
+AccelStepper stepperAZ(AccelStepper::DRIVER, stepPinAZ, dirPinALT);
+AccelStepper stepperALT(AccelStepper::DRIVER, stepPinAZ, dirPinALT);
+
+//1344000
+const int stepsPerRevolution = 3200;
+const double AZRange = 360.00000;
+const double ALTRange = 90.00000;
+const double stepsPerDegreeAZ = stepsPerRevolution/AZRange;
+const double stepsPerDegreeALT = stepsPerRevolution/ALTRange;
+const double degreesPerStepAZ = AZRange/stepsPerRevolution;
+const double degreesPerStepALT = ALTRange/stepsPerRevolution;
+double targetAZ = 0.0;
+double targetALT = 0.0;
+double currentAZ = 0.0;
+double currentALT = 0.0;
+
+unsigned long currentMilis=0;
+unsigned long previousMilis=0;
+
+
 boolean parked = true;
-int deltaAZsteps = 0;
-int deltaALTsteps = 0;
+boolean aligned = false;
 String inputString = "";
 bool stringComplete = false;
 
-Unistep2 stepperAZ(3,4,5,6, stepsPerRevolution, 2000);            
-Unistep2 stepperALT(8,9,10,11, stepsPerRevolution, 2000);
+int toSteps(double value, boolean alt){
+  if(alt){
+    return value * stepsPerDegreeALT;
+  }else{
+    return value * stepsPerDegreeAZ;
+  }
+}
+
+double fromSteps(int value, boolean alt){
+  if(alt){
+    return value * degreesPerStepALT;
+  }else{
+    return value * degreesPerStepAZ;
+  }
+}
 
 void moveMount(){
   if(!parked){
-    if( stepperAZ.stepsToGo() == 0 ){
-      if(deltaAZsteps > 0){
-        stepperAZ.move(1);
-        deltaAZsteps--;
-        Serial.println(deltaAZsteps);
-      }else if(deltaAZsteps < 0){
-        stepperAZ.move(-1);
-        deltaAZsteps++;
-        Serial.println(deltaAZsteps);
-      }
+    if( stepperAZ.distanceToGo() == 0 ){
+      currentAZ = targetAZ;
+      stepperAZ.moveTo(toSteps(targetAZ, false));
+    }else {
+      currentAZ = fromSteps(stepperAZ.currentPosition(), false);
     }
-    if( stepperALT.stepsToGo() == 0 ){
-      if(deltaALTsteps > 0){
-        stepperALT.move(1);
-        deltaALTsteps--;
-        Serial.println(deltaALTsteps);
-      }else if(deltaALTsteps < 0){
-        stepperALT.move(-1);
-        deltaALTsteps++;
-        Serial.println(deltaALTsteps);
-      }
+    if( stepperALT.distanceToGo() == 0 ){
+      currentALT = targetALT;
+      stepperALT.moveTo(toSteps(targetALT, true));
+    }else {
+      currentALT = fromSteps(stepperALT.currentPosition(), true);
     } 
   }
 }
@@ -50,52 +78,81 @@ void serialEvent() {
 void setup(){
   pinMode(A0, INPUT);
   pinMode(A1, INPUT);
+  pinMode(8, INPUT_PULLUP);
   Serial.begin (115200);
   inputString.reserve(200);
   stringComplete = false;
+  stepperAZ.setMaxSpeed(200);
+  stepperAZ.setAcceleration(30);
+  stepperALT.setMaxSpeed(200);
+  stepperALT.setAcceleration(30);
+}
+
+void setAligned(){
+  boolean ualigned = digitalRead(8);
+  if(!ualigned){
+    currentAZ = targetAZ;
+    currentALT = targetALT;
+    aligned = true;
+    parked = false;
+    //Serial.println("aligned");
+  }
 }
 
 void align(){
   int potAZ = map(analogRead(A0),0,1024,-512,512);
   int potALT = map(analogRead(A1),0,1024,-512,512);
-  if( stepperAZ.stepsToGo() == 0 ){
+  if( stepperAZ.distanceToGo() == 0 ){
     if(potAZ < -150){
       stepperAZ.move(-1);
-      Serial.println("AZ-");
     }else if(potAZ > 150){
       stepperAZ.move(1);
-      Serial.println("AZ+");
     }
   }
-  if( stepperALT.stepsToGo() == 0 ){
+  if( stepperALT.distanceToGo() == 0 ){
     if(potALT < -150){
       stepperALT.move(-1);
-      Serial.println("ALT-");
     }else if(potALT > 150){
       stepperALT.move(1);
-      Serial.println("ALT+");
     }
+  }
+}
+
+void reportCurrent(){
+  if(fabs(targetAZ - currentAZ) > 0.001){
+    Serial.print("AZ");
+    Serial.println(currentAZ, 6);
+  }
+  if(fabs(targetALT - currentALT) > 0.001){
+    Serial.print("AL");
+    Serial.println(currentALT, 6);
   }
 }
 
 void loop(){
   stepperAZ.run();
   stepperALT.run();
-  moveMount();
-  align();
+  currentMilis=millis();
+  if(currentMilis > (previousMilis + 100)){
+    previousMilis = currentMilis;
+    moveMount();
+    align();
+    setAligned();
+    reportCurrent();
+  }
   if (stringComplete) {
     String cmd = inputString;
     inputString = "";
     stringComplete = false;
-    Serial.print(cmd);
+    //Serial.print(cmd);
     if (cmd.startsWith("AZ")){
       String sval = cmd.substring(2);
-      Serial.print(sval);
-      deltaAZsteps += sval.toInt();
+      //Serial.print(sval);
+      targetAZ = sval.toDouble();
     } else if (cmd.startsWith("AL")){
       String sval = cmd.substring(2);
-      Serial.print(sval);
-      deltaALTsteps += sval.toInt();
+      //Serial.print(sval);
+      targetALT = sval.toDouble();
     } else if (cmd.startsWith("P")){
       parked = true;
     } else if (cmd.startsWith("UP")){
