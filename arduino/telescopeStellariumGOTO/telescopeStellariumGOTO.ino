@@ -1,3 +1,4 @@
+
 #include <math.h>
 
 #include <ESP8266WiFi.h>
@@ -8,14 +9,6 @@
 #include <ESP8266mDNS.h>
 
 const int epoch2jd = 946684800;
-
-const int stepsPerRevolution = 40960;
-const double AZRange = 360.00000;
-const double ALTRange = 90.00000;
-const double stepsPerDegreeAZ = stepsPerRevolution/AZRange;
-const double stepsPerDegreeALT = stepsPerRevolution/ALTRange;
-const double degreesPerStepAZ = AZRange/stepsPerRevolution;
-const double degreesPerStepALT = ALTRange/stepsPerRevolution;
 
 WiFiUDP ntpUDP;
 const int port = 10001;
@@ -40,8 +33,10 @@ double currentALT=0;
 double currentAZ=0;
 boolean parked = true;
 boolean aligned = false;
-double deltaAZ = 0.00000;
-double deltaALT = 0.0000;
+
+String inputString = "";
+bool stringComplete = false;
+
 
 unsigned long currentMilis=0;
 unsigned long previousMilis=0;
@@ -67,46 +62,17 @@ signed int DECDouble2stellarium(double DECDouble){
   return (signed int) mapDouble(DECDouble, -90.00000, 90.00000, -0x40000000, 0x40000000);
 }
 
-void calcDeltas(){
-  deltaAZ = targetAZ - currentAZ;
-  deltaALT = targetALT - currentALT;
-//  if((currentAZ - targetAZ) > (targetAZ - currentAZ)){
-//    deltaAZ = targetAZ - currentAZ;
-//  }else{
-//    deltaAZ = currentAZ - targetAZ;
-//  }
-//  if((currentALT - targetALT) > (targetALT - currentALT)){
-//    deltaALT = targetALT - currentALT;
-//  }else{
-//    deltaALT = currentALT - targetALT;
-//  }
-}
+void sendTarget(){
 
-int toSteps(double value, boolean alt){
-  if(alt){
-    return value * stepsPerDegreeALT;
-  }else{
-    return value * stepsPerDegreeAZ;
-  }
-}
-
-void sendDeltaSteps(){
-  int stepsAZ = toSteps(deltaAZ,false);
-  int stepsALT = toSteps(deltaALT,true);
-  if(aligned && parked){
-    Serial.println("UP");
-    parked = false;
-  }
-  if(stepsAZ != 0 && !parked){
+  if(fabs(targetAZ - currentAZ) > 0.001){
     Serial.print("AZ");
-    Serial.println(stepsAZ);
-    currentAZ = targetAZ;
+    Serial.println(targetAZ);
   }
-  if(stepsALT != 0 && !parked){
+  if(fabs(targetALT - currentALT) > 0.001){
     Serial.print("AL");
-    Serial.println(stepsALT);
-    currentALT = targetALT;
+    Serial.println(targetALT);
   }
+  
 }
 
 void configModeCallback (WiFiManager *myWiFiManager) {
@@ -116,9 +82,21 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   Serial.println(myWiFiManager->getConfigPortalSSID());
 }
 
+void serialEvent() {
+  while (Serial.available() && !stringComplete) {
+    char inChar = (char)Serial.read();
+    inputString += inChar;
+    if (inChar == '\n') {
+      stringComplete = true;
+    }
+  }
+}
+
 void setup() {
   pinMode(D1, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
+  inputString.reserve(200);
+  stringComplete = false;
   Serial.begin (115200);
 
   WiFiManager wifiManager;
@@ -316,25 +294,26 @@ void readTargetRADEC(){
   }
 }
 
-void align(){
-  boolean ualigned = digitalRead(D1);
-  if(!ualigned){
-    currentAZ = targetAZ;
-    currentALT = targetALT;
-    deltaAZ = 0.00000;
-    deltaALT = 0.0000;
-    aligned = true;
-    Serial.println("UP");
-    parked = false;
-  }else{
-    currentAZ = targetAZ;
-    currentALT = targetALT;
-    deltaAZ = 0.00000;
-    deltaALT = 0.0000;
-  }
-}
-
 void loop() {
+  if (stringComplete) {
+    String cmd = inputString;
+    inputString = "";
+    stringComplete = false;
+    //Serial.print(cmd);
+    if (cmd.startsWith("AZ")){
+      String sval = cmd.substring(2);
+      //Serial.print(sval);
+      currentAZ = sval.toDouble();
+    } else if (cmd.startsWith("AL")){
+      String sval = cmd.substring(2);
+      //Serial.print(sval);
+      currentALT = sval.toDouble();
+    } else if (cmd.startsWith("P")){
+      parked = true;
+    } else if (cmd.startsWith("UP")){
+      parked = false;
+    }
+  }
   currentMilis=millis();
   if(cl == NULL){
     cl = server.available();
@@ -362,7 +341,7 @@ void loop() {
 //    Serial.print("currentDEC = ");
 //    Serial.println(currentDEC,10);
 //    Serial.print("currentRA = ");
-//    Serial.println(currentRA,10);
+////    Serial.println(currentRA,10);
 //    Serial.print("currentALT = ");
 //    Serial.println(currentALT,10);
 //    Serial.print("currentAZ = ");
@@ -376,12 +355,5 @@ void loop() {
       }
       digitalWrite(LED_BUILTIN, ledState);
   }
-  //Send message to move mount
-  calcDeltas();
-  if(!aligned){
-    align();
-  }
-  if(!parked && (deltaAZ > 0.0000 || deltaAZ < 0.0000 || deltaALT > 0.0000 || deltaALT < 0.0000)){
-    sendDeltaSteps();
-  }
+  sendTarget();
 }
