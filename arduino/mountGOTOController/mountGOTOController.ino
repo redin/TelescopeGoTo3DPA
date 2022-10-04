@@ -1,23 +1,19 @@
 #include <AccelStepper.h>
 
 // Define pin connections
-const int dirPinAZ = 2;
-const int dirPinALT = 4;
-const int stepPinAZ = 3;
-const int stepPinALT = 5;
 
 // Creates instances
-AccelStepper stepperAZ(AccelStepper::DRIVER, stepPinAZ, dirPinALT);
-AccelStepper stepperALT(AccelStepper::DRIVER, stepPinAZ, dirPinALT);
+AccelStepper stepperAZ(AccelStepper::DRIVER, 3, 2);
+AccelStepper stepperALT(AccelStepper::DRIVER, 5, 4);
 
 //1344000
 const int stepsPerRevolution = 3200;
 const double AZRange = 360.00000;
 const double ALTRange = 90.00000;
-const double stepsPerDegreeAZ = stepsPerRevolution/AZRange;
-const double stepsPerDegreeALT = stepsPerRevolution/ALTRange;
-const double degreesPerStepAZ = AZRange/stepsPerRevolution;
-const double degreesPerStepALT = ALTRange/stepsPerRevolution;
+const double stepsPerDegreeAZ = ((double)stepsPerRevolution)/AZRange;
+const double stepsPerDegreeALT = ((double)stepsPerRevolution)/ALTRange;
+const double degreesPerStepAZ = AZRange/((double)stepsPerRevolution);
+const double degreesPerStepALT = ALTRange/((double)stepsPerRevolution);
 double targetAZ = 0.0;
 double targetALT = 0.0;
 double currentAZ = 0.0;
@@ -26,7 +22,6 @@ double currentALT = 0.0;
 unsigned long currentMilis=0;
 unsigned long previousMilis=0;
 
-
 boolean parked = true;
 boolean aligned = false;
 String inputString = "";
@@ -34,17 +29,17 @@ bool stringComplete = false;
 
 int toSteps(double value, boolean alt){
   if(alt){
-    return value * stepsPerDegreeALT;
+    return (value * stepsPerDegreeALT);
   }else{
-    return value * stepsPerDegreeAZ;
+    return (value * stepsPerDegreeAZ);
   }
 }
 
 double fromSteps(int value, boolean alt){
   if(alt){
-    return value * degreesPerStepALT;
+    return ((double)value) * degreesPerStepALT;
   }else{
-    return value * degreesPerStepAZ;
+    return ((double)value ) * degreesPerStepAZ;
   }
 }
 
@@ -52,16 +47,19 @@ void moveMount(){
   if(!parked){
     if( stepperAZ.distanceToGo() == 0 ){
       currentAZ = targetAZ;
-      stepperAZ.moveTo(toSteps(targetAZ, false));
+      
     }else {
       currentAZ = fromSteps(stepperAZ.currentPosition(), false);
     }
+    stepperAZ.moveTo(toSteps(targetAZ, false));
+    
     if( stepperALT.distanceToGo() == 0 ){
       currentALT = targetALT;
-      stepperALT.moveTo(toSteps(targetALT, true));
+      
     }else {
       currentALT = fromSteps(stepperALT.currentPosition(), true);
-    } 
+    }
+    stepperALT.moveTo(toSteps(targetALT, true)); 
   }
 }
 
@@ -78,24 +76,33 @@ void serialEvent() {
 void setup(){
   pinMode(A0, INPUT);
   pinMode(A1, INPUT);
-  pinMode(8, INPUT_PULLUP);
+  pinMode(8, INPUT);
+  digitalWrite(8,HIGH);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
   Serial.begin (115200);
   inputString.reserve(200);
   stringComplete = false;
-  stepperAZ.setMaxSpeed(200);
-  stepperAZ.setAcceleration(30);
-  stepperALT.setMaxSpeed(200);
-  stepperALT.setAcceleration(30);
+  stepperAZ.setMaxSpeed(1000);
+  stepperAZ.setAcceleration(300);
+  stepperALT.setMaxSpeed(1000);
+  stepperALT.setAcceleration(300);
 }
 
 void setAligned(){
   boolean ualigned = digitalRead(8);
-  if(!ualigned){
+  if(!ualigned && !aligned){
     currentAZ = targetAZ;
     currentALT = targetALT;
     aligned = true;
     parked = false;
     //Serial.println("aligned");
+    digitalWrite(LED_BUILTIN, HIGH);
+  }else if(!ualigned && aligned) {
+    aligned = false;
+    parked = true;
+    //Serial.println("parked");
+    digitalWrite(LED_BUILTIN, LOW);
   }
 }
 
@@ -104,26 +111,29 @@ void align(){
   int potALT = map(analogRead(A1),0,1024,-512,512);
   if( stepperAZ.distanceToGo() == 0 ){
     if(potAZ < -150){
-      stepperAZ.move(-1);
+      stepperAZ.setCurrentPosition(stepperAZ.currentPosition()-11);
     }else if(potAZ > 150){
-      stepperAZ.move(1);
+      stepperAZ.setCurrentPosition(stepperAZ.currentPosition()+11);
+      
     }
+    stepperAZ.moveTo(toSteps(targetAZ, false));
   }
   if( stepperALT.distanceToGo() == 0 ){
     if(potALT < -150){
-      stepperALT.move(-1);
+      stepperALT.setCurrentPosition(stepperALT.currentPosition()-11);
     }else if(potALT > 150){
-      stepperALT.move(1);
+      stepperALT.setCurrentPosition(stepperALT.currentPosition()+11);
     }
+    stepperALT.moveTo(toSteps(targetALT, true)); 
   }
 }
 
 void reportCurrent(){
-  if(fabs(targetAZ - currentAZ) > 0.001){
+  if(fabs(targetAZ - currentAZ) > 0.00001){
     Serial.print("AZ");
     Serial.println(currentAZ, 6);
   }
-  if(fabs(targetALT - currentALT) > 0.001){
+  if(fabs(targetALT - currentALT) > 0.00001){
     Serial.print("AL");
     Serial.println(currentALT, 6);
   }
