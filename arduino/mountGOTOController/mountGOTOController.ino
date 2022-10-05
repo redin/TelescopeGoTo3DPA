@@ -3,11 +3,11 @@
 // Define pin connections
 
 // Creates instances
-AccelStepper stepperAZ(AccelStepper::DRIVER, 3, 2);
-AccelStepper stepperALT(AccelStepper::DRIVER, 5, 4);
+AccelStepper stepperAZ(AccelStepper::DRIVER, 4, 3);
+AccelStepper stepperALT(AccelStepper::DRIVER, 6, 5);
 
 //1344000
-const int stepsPerRevolution = 3200;
+const int stepsPerRevolution = 1344000;
 const double AZRange = 360.00000;
 const double ALTRange = 90.00000;
 const double stepsPerDegreeAZ = ((double)stepsPerRevolution)/AZRange;
@@ -84,9 +84,9 @@ void setup(){
   inputString.reserve(200);
   stringComplete = false;
   stepperAZ.setMaxSpeed(1000);
-  stepperAZ.setAcceleration(300);
+  stepperAZ.setAcceleration(30);
   stepperALT.setMaxSpeed(1000);
-  stepperALT.setAcceleration(300);
+  stepperALT.setAcceleration(30);
 }
 
 void setAligned(){
